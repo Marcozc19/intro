@@ -1,7 +1,7 @@
 import * as THREE from 'three'
-import { box, cyl, dome, gable, glow, mat, sign, windowedBox } from './kit'
+import { box, cyl, dome, gable, glow, logoPlate, mat, sign, windowedBox } from './kit'
 import { createSmoke } from './life'
-import { createFeedScreen, createNoteLogo, createPapers, createPlugs } from './signature'
+import { createFeedScreen, createNoteLogo } from './signature'
 
 // One builder per place. Each draws into a group whose origin is the middle of
 // the plot at ground level, with the front door facing +z, and returns the
@@ -107,22 +107,93 @@ const pico: Builder = (g) => {
   return 4.4
 }
 
+/** Dark photovoltaic panels with a fine grid, for the solar canopy. */
+function solarTexture(): THREE.CanvasTexture {
+  const c = document.createElement('canvas')
+  c.width = c.height = 64
+  const ctx = c.getContext('2d')!
+  ctx.fillStyle = '#1d2c44'
+  ctx.fillRect(0, 0, 64, 64)
+  ctx.strokeStyle = '#6f86a8'
+  ctx.lineWidth = 3
+  ctx.strokeRect(0, 0, 64, 64)
+  ctx.lineWidth = 1
+  ctx.strokeStyle = '#34496b'
+  for (const k of [16, 32, 48]) {
+    ctx.beginPath()
+    ctx.moveTo(k, 0)
+    ctx.lineTo(k, 64)
+    ctx.moveTo(0, k)
+    ctx.lineTo(64, k)
+    ctx.stroke()
+  }
+  const tex = new THREE.CanvasTexture(c)
+  tex.colorSpace = THREE.SRGBColorSpace
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping
+  tex.repeat.set(9, 5)
+  return tex
+}
+
+// The Roosevelt Island campus in miniature: the Bloomberg Center with its
+// solar canopy in front, The House (the residential tower) and the angular
+// glass Tata Innovation Center behind.
 const cornell: Builder = (g) => {
-  plinth(g, 3.6, 2.4)
-  windowedBox(g, 3.6, 1.5, 2.4, '#8d7a66', '#bfe3ea', 0, 0.1, 0, 0.6)
-  // Residential tower behind
-  windowedBox(g, 1.3, 4.2, 1.3, '#d9dde0', '#5b7f95', -1.05, 0.1, -0.45)
-  box(g, 1.4, 0.1, 1.4, mat('#b8bfc5'), -1.05, 4.3, -0.45)
-  // Solar canopy floating over the main hall
-  for (const [x, z] of [[-1.7, 1.1], [1.7, 1.1], [1.7, -1.1]]) cyl(g, 0.04, 0.04, 0.6, dark, x, 1.6, z, 8)
-  box(g, 4, 0.08, 2.8, mat('#2d3b4f', 0.3, 0.5), 0.2, 2.2, 0)
-  // Research: papers circling above the hall, a few lighting up as recommendations
-  const papers = createPapers()
-  papers.position.set(0.7, 3.3, 0.1)
-  g.add(papers)
-  door(g, 1.21, '#5b1010', 0.6, 0.75)
-  sign(g, 'CORNELL TECH', 1.8, 0.24, '#b31b1b', '#ffffff', 0.4, 1, 1.22)
-  return 4.6
+  plinth(g, 4.6, 3.4)
+  door(g, 1.61, '#5b1010', 0.6, 0.7)
+
+  // Bloomberg Center: long and low, bronze-coloured metal, glass ground floor
+  const BX = 0.4
+  const BZ = 0.75
+  windowedBox(g, 3.4, 1.5, 1.7, '#a38a69', '#e3eeee', BX, 0.1, BZ, 0.42)
+  box(g, 3.42, 0.34, 1.72, mat('#35444f', 0.3, 0.3), BX, 0.1, BZ)
+  box(g, 3.5, 0.08, 1.8, mat('#8a7458'), BX, 1.6, BZ)
+  // The solar canopy floats over the whole roof on thin columns
+  for (const [x, z] of [[-1.5, -0.25], [1.5, -0.25], [-1.5, 1.0], [1.5, 1.0]]) {
+    cyl(g, 0.035, 0.035, 0.5, dark, BX + x, 1.68, BZ + z - 0.38, 8)
+  }
+  const pv = new THREE.MeshStandardMaterial({ map: solarTexture(), roughness: 0.3, metalness: 0.4 })
+  const underside = mat('#c9ced2')
+  box(g, 4, 0.07, 2.1, [underside, underside, pv, underside, underside, underside], BX, 2.18, BZ + 0.1)
+  // Small, in the top right corner of the front. 552 × 190 image, so the plate keeps that shape.
+  logoPlate(g, 1.02, 0.35, 'logos/cornell-tech.jpg', 'CORNELL TECH', BX + 1.1, 1.17, BZ + 0.87)
+
+  // The House: a tall, slim tower with a dark louvred stripe up two faces
+  const HX = -1.65
+  const HZ = -0.95
+  windowedBox(g, 1.05, 5.3, 1.05, '#c6ccd1', '#6f8a9c', HX, 0.1, HZ, 0.35)
+  const louvre = mat('#39424c', 0.5, 0.2)
+  box(g, 0.2, 5.1, 0.04, louvre, HX + 0.2, 0.2, HZ + 0.53)
+  box(g, 0.04, 5.1, 0.2, louvre, HX - 0.53, 0.2, HZ - 0.15)
+  box(g, 1.12, 0.12, 1.12, mat('#aab1b7'), HX, 5.4, HZ)
+  box(g, 0.5, 0.25, 0.5, mat('#8f979e'), HX + 0.1, 5.52, HZ - 0.1)
+
+  // Tata Innovation Center: glassy, with the upper floors cantilevered forward
+  // (taller than the Bloomberg Center, so it shows above the canopy)
+  const TX = 1.15
+  const TZ = -1.1
+  windowedBox(g, 1.8, 1.3, 1.2, '#dde4e9', '#4f9db8', TX, 0.1, TZ, 0.36)
+  const upper = windowedBox(g, 2.1, 1.5, 1.3, '#dde4e9', '#4f9db8', TX + 0.1, 1.4, TZ + 0.2, 0.36)
+  upper.rotation.y = -0.09
+  box(g, 2.16, 0.07, 1.36, mat('#b9c2c9'), TX + 0.1, 2.9, TZ + 0.2).rotation.y = -0.09
+
+  // New York: a yellow cab waiting out front, roof light glowing
+  const cab = new THREE.Group()
+  cab.position.set(-1.75, 0.1, 0.95)
+  cab.rotation.y = 0.12
+  g.add(cab)
+  const yellow = mat('#f6c21a', 0.5)
+  box(cab, 0.36, 0.15, 0.78, yellow, 0, 0.07, 0)
+  box(cab, 0.33, 0.14, 0.4, mat('#2a323a', 0.3, 0.3), 0, 0.22, -0.04)
+  box(cab, 0.34, 0.03, 0.42, yellow, 0, 0.36, -0.04)
+  const roofLight = glow('#fff2b0', 1)
+  box(cab, 0.16, 0.05, 0.07, roofLight, 0, 0.39, -0.04)
+  for (const [x, z] of [[-0.18, 0.25], [0.18, 0.25], [-0.18, -0.25], [0.18, -0.25]]) {
+    const wheel = cyl(cab, 0.07, 0.07, 0.05, dark, x, 0, z, 12)
+    wheel.rotation.z = Math.PI / 2
+    wheel.position.y = 0.07
+  }
+  cab.userData.tick = (t: number) => (roofLight.emissiveIntensity = 0.9 + Math.sin(t * 3) * 0.5)
+  return 5.9
 }
 
 const studio: Builder = (g) => {
@@ -183,13 +254,6 @@ const tiktok: Builder = (g) => {
   const feed = createFeedScreen(1.15, 2.3)
   feed.position.set(0, 4.1, 1.09)
   g.add(feed)
-  // Developer platform: outside apps plugging into both sides of the tower
-  const plugsRight = createPlugs([2.5, 3.7, 4.9], ['#25f4ee', '#fe2c55', '#ffffff'])
-  plugsRight.position.x = 1.05
-  const plugsLeft = createPlugs([3.1, 4.3], ['#fe2c55', '#25f4ee'])
-  plugsLeft.position.x = -1.05
-  plugsLeft.rotation.y = Math.PI
-  g.add(plugsRight, plugsLeft)
   door(g, 1.41, '#25f4ee', 0.6, 0.8)
   sign(g, 'TikTok', 1.3, 0.34, '#000000', '#ffffff', 0, 1.02, 1.42)
   return 9.1

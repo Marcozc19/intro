@@ -28,6 +28,8 @@ type Events = {
   onPick(id: string): void
   onPickBalloon(): void
   onPickNothing(): void
+  /** The visitor dragged away from a focused building: close its panel. */
+  onRelease(): void
 }
 
 const BG = '#e9f3f2'
@@ -114,7 +116,7 @@ export function createWorld(canvas: HTMLCanvasElement, labelsEl: HTMLElement, ha
   if (campus >= 0) {
     const site = sites[campus]
     const left = new THREE.Vector3(-Math.cos(site.rotationY), 0, Math.sin(site.rotationY))
-    const station = site.position.clone().addScaledVector(left, 3.9)
+    const station = site.position.clone().addScaledVector(left, 4.3)
     scene.add(createTram(station, new THREE.Vector3(station.x, 0, station.z).normalize()))
     keepClear.push(new THREE.Vector2(station.x, station.z))
   }
@@ -234,7 +236,19 @@ export function createWorld(canvas: HTMLCanvasElement, labelsEl: HTMLElement, ha
   let selected: string | null = null
 
   /** Fly to an item, or back to the overview of a level when id is null. */
+  let recentring = false
+  /** Drop the focused item without flying anywhere; the pivot glides back to the centre. */
+  function release() {
+    selected = null
+    shiftGoal = 0.13
+    recentring = true
+    labelsEl.classList.remove('has-selection')
+    for (const it of items) it.label.classList.remove('selected')
+    events.onRelease()
+  }
+
   function focus(id: string | null, toLevel: Level = level) {
+    recentring = false
     const item = id ? items.find((it) => it.id === id) : undefined
     const nextLevel = item ? item.level : toLevel
     const climbing = nextLevel !== level
@@ -275,6 +289,9 @@ export function createWorld(canvas: HTMLCanvasElement, labelsEl: HTMLElement, ha
   }
 
   canvas.addEventListener('pointermove', (e) => {
+    // Dragging always turns the view about the middle of the island (or of
+    // the clouds). If a building is focused, a drag lets go of it.
+    if (downAt && selected && !tween && Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y) > 6) release()
     hovered = downAt ? null : pickAt(e.clientX, e.clientY)
     canvas.style.cursor = hovered ? 'pointer' : 'grab'
   })
@@ -322,6 +339,15 @@ export function createWorld(canvas: HTMLCanvasElement, labelsEl: HTMLElement, ha
     resize()
 
     stepTween(dt)
+    if (recentring && !tween) {
+      // Glide the pivot back to the centre. The zoom level and viewing direction
+      // stay exactly as the visitor left them.
+      const home = overview(level).target
+      const away = camera.position.clone().sub(controls.target)
+      controls.target.lerp(home, Math.min(1, dt * 3))
+      camera.position.copy(controls.target).add(away)
+      if (controls.target.distanceTo(home) < 0.03) recentring = false
+    }
     if (!tween) controls.update()
 
     // Wide screens shift sideways; narrow ones lift the scene above the bottom sheet.

@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { box, cyl, glow, mat } from './kit'
+import { box, cyl, glow, mat, rng } from './kit'
 import { groundHeight } from './terrain'
 
 // Signature props: one animated set piece per experience that shows what the
@@ -114,80 +114,106 @@ export function createNoteLogo(cyan: THREE.Material, red: THREE.Material): THREE
   return g
 }
 
-// ── TikTok: plugs flying in and docking (the developer platform) ────────────
+// ── Cornell Tech: the Roosevelt Island tram ─────────────────────────────────
 
 /**
- * Sockets on a wall facing +x, each with a plug that flies in, snaps on,
- * stays connected for a while, then leaves.
+ * Manhattan in miniature: a long, narrow island packed with towers that rise
+ * to two peaks (midtown and downtown), with the Empire State and Chrysler
+ * buildings, One World Trade, Central Park, and the Statue of Liberty off the
+ * tip. Local x runs the length of the island; the tram lands at z = -1.3.
  */
-export function createPlugs(heights: number[], colors: string[]): THREE.Group {
+function createManhattan(): THREE.Group {
   const g = new THREE.Group()
-  const CYCLE = 7
-  const plugs = heights.map((y, i) => {
-    const light = glow(colors[i % colors.length], 0.2)
-    box(g, 0.04, 0.34, 0.34, mat('#2a2d34'), 0.02, y - 0.17, 0)
-    box(g, 0.05, 0.2, 0.2, light, 0.03, y - 0.1, 0)
-    const plug = new THREE.Group()
-    box(plug, 0.3, 0.3, 0.3, mat(colors[i % colors.length], 0.5), 0.2, -0.15, 0)
-    box(plug, 0.14, 0.05, 0.05, mat('#d9dde0', 0.3, 0.8), 0.02, 0.04, 0.07)
-    box(plug, 0.14, 0.05, 0.05, mat('#d9dde0', 0.3, 0.8), 0.02, 0.04, -0.07)
-    g.add(plug)
-    return { plug, light, y, away: new THREE.Vector3(3.2, y + 1.4, i % 2 === 0 ? 1.6 : -1.6), offset: i / heights.length }
-  })
-  const docked = new THREE.Vector3()
-  const place = (t: number) => {
-    for (const p of plugs) {
-      const phase = (t / CYCLE + p.offset) % 1
-      docked.set(0.06, p.y, 0)
-      const arrive = ease(clamp01(phase / 0.3))
-      const leave = clamp01((phase - 0.85) / 0.15)
-      p.plug.position.lerpVectors(p.away, docked, arrive)
-      // A little squash as it snaps home
-      const snap = phase > 0.3 && phase < 0.4 ? 1 + Math.sin(((phase - 0.3) / 0.1) * Math.PI) * 0.25 : 1
-      p.plug.scale.setScalar(Math.min(1, phase * 12) * (1 - leave) * snap)
-      p.light.emissiveIntensity = phase > 0.3 && phase < 0.85 ? 1.6 : 0.2
+  g.name = 'manhattan'
+  const LENGTH = 5.2 // half-length
+  const WIDTH = 2.5 // half-width
+  const GROUND = 0.48
+
+  const shore = new THREE.Mesh(new THREE.SphereGeometry(1, 28, 14), mat('#ead9a6', 1))
+  shore.scale.set(LENGTH + 0.5, 0.75, WIDTH + 0.4)
+  shore.position.y = -0.22
+  const streets = new THREE.Mesh(new THREE.SphereGeometry(1, 28, 14), mat('#c9cdd0', 1))
+  streets.scale.set(LENGTH, 0.7, WIDTH)
+  streets.position.y = -0.14
+  g.add(shore, streets)
+
+  // Central Park: a green rectangle with a few trees
+  const PARK = { x: 2.1, z: 0.25, w: 2.1, d: 1.3 }
+  box(g, PARK.w, 0.05, PARK.d, mat('#7fb56a', 1), PARK.x, GROUND + 0.02, PARK.z)
+  const rand = rng(77)
+  const foliage = new THREE.MeshStandardMaterial({ color: '#4f9a55', roughness: 1, flatShading: true })
+  for (let i = 0; i < 7; i++) {
+    const tree = new THREE.Mesh(new THREE.IcosahedronGeometry(0.14, 0), foliage)
+    tree.position.set(PARK.x + (rand() - 0.5) * (PARK.w - 0.4), GROUND + 0.2, PARK.z + (rand() - 0.5) * (PARK.d - 0.3))
+    g.add(tree)
+  }
+
+  // Landmarks
+  const LANDMARKS = [{ x: -0.5, z: 0.35 }, { x: 0.45, z: 1.2 }, { x: -3.7, z: 0.15 }]
+  const limestone = mat('#c3bbad')
+  const [empire, chrysler, wtc] = LANDMARKS
+  box(g, 0.72, 1.8, 0.6, limestone, empire.x, GROUND, empire.z)
+  box(g, 0.52, 1, 0.44, limestone, empire.x, GROUND + 1.8, empire.z)
+  box(g, 0.3, 0.55, 0.28, limestone, empire.x, GROUND + 2.8, empire.z)
+  cyl(g, 0.02, 0.06, 0.85, mat('#9aa3ab', 0.4, 0.6), empire.x, GROUND + 3.35, empire.z, 8)
+  box(g, 0.46, 2.1, 0.46, mat('#b4b9be'), chrysler.x, GROUND, chrysler.z)
+  cyl(g, 0.02, 0.27, 1, mat('#dfe5ea', 0.25, 0.8), chrysler.x, GROUND + 2.1, chrysler.z, 8)
+  const glass = mat('#6fa9c4', 0.2, 0.5)
+  cyl(g, 0.24, 0.42, 3.3, glass, wtc.x, GROUND, wtc.z, 4).rotation.y = Math.PI / 4
+  cyl(g, 0.015, 0.04, 0.9, mat('#dfe5ea', 0.3, 0.7), wtc.x, GROUND + 3.3, wtc.z, 8)
+
+  // Everything else: a street grid of blocks, drawn as one instanced mesh
+  const blocks: { x: number; z: number; w: number; d: number; h: number; color: string }[] = []
+  const palette = ['#c3bbad', '#b8826a', '#9aa6b0', '#6f97ad', '#d8d2c4', '#8d7f77', '#a9b7c0']
+  for (let x = -LENGTH + 0.8; x <= LENGTH - 0.8; x += 0.78) {
+    for (let z = -WIDTH + 0.55; z <= WIDTH - 0.5; z += 0.74) {
+      if ((x / (LENGTH - 0.5)) ** 2 + (z / (WIDTH - 0.35)) ** 2 > 1) continue // off the island
+      if (Math.hypot(x, z + 1.3) < 1) continue // the tram station
+      if (Math.abs(x - PARK.x) < PARK.w / 2 + 0.25 && Math.abs(z - PARK.z) < PARK.d / 2 + 0.25) continue
+      if (LANDMARKS.some((l) => Math.hypot(x - l.x, z - l.z) < 0.7)) continue
+      const midtown = 1.5 * Math.exp(-(((x + 0.4) / 1.3) ** 2))
+      const downtown = 1.2 * Math.exp(-(((x + 3.6) / 0.9) ** 2))
+      blocks.push({
+        x: x + (rand() - 0.5) * 0.12, z: z + (rand() - 0.5) * 0.12,
+        w: 0.46 + rand() * 0.16, d: 0.44 + rand() * 0.14,
+        h: 0.55 + rand() * 0.75 + midtown + downtown,
+        color: palette[Math.floor(rand() * palette.length)],
+      })
     }
   }
-  place(0)
-  g.userData.tick = place
-  return g
-}
-
-// ── Cornell Tech: papers circling, a few picked out as recommendations ──────
-
-export function createPapers(count = 10, radius = 0.85): THREE.Group {
-  const g = new THREE.Group()
-  const sheet = new THREE.PlaneGeometry(0.3, 0.4)
-  const papers = Array.from({ length: count }, (_, i) => {
-    const material = new THREE.MeshStandardMaterial({
-      color: '#ffffff', emissive: '#ffffff', emissiveIntensity: 0.35, side: THREE.DoubleSide, roughness: 0.9,
-    })
-    const mesh = new THREE.Mesh(sheet, material)
-    mesh.castShadow = true
-    g.add(mesh)
-    return { mesh, material, angle: (i / count) * Math.PI * 2, lift: 0 }
+  const towers = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({ roughness: 0.8 }), blocks.length)
+  const m = new THREE.Object3D()
+  const color = new THREE.Color()
+  blocks.forEach((b, i) => {
+    m.position.set(b.x, GROUND - 0.15 + b.h / 2, b.z)
+    m.scale.set(b.w, b.h + 0.3, b.d)
+    m.updateMatrix()
+    towers.setMatrixAt(i, m.matrix)
+    towers.setColorAt(i, color.set(b.color))
   })
-  const PICK = 1.8 // seconds each recommendation stays lit
-  const place = (t: number, dt = 0) => {
-    const picked = (Math.floor(t / PICK) * 7) % count
-    papers.forEach((p, i) => {
-      const on = i === picked || i === (picked + 4) % count ? 1 : 0
-      p.lift += (on - p.lift) * Math.min(1, dt * 6)
-      const a = p.angle + t * 0.5
-      p.mesh.position.set(Math.cos(a) * radius, Math.sin(t * 1.3 + i) * 0.08 + p.lift * 0.45, Math.sin(a) * radius)
-      p.mesh.rotation.set(0.25, -a + Math.PI / 2, Math.sin(t * 2 + i) * 0.15)
-      p.mesh.scale.setScalar(1 + p.lift * 0.5)
-      // Unlit papers keep a faint white glow so they read against the dark roof
-      p.material.emissive.set(p.lift > 0.3 ? '#ffc21a' : '#ffffff')
-      p.material.emissiveIntensity = 0.35 + p.lift * 1.1
-    })
-  }
-  place(0)
-  g.userData.tick = place
+  g.add(towers)
+
+  // Statue of Liberty on her own rock, off the downtown tip
+  const liberty = new THREE.Group()
+  liberty.position.set(-LENGTH - 1.5, 0, 0.5)
+  g.add(liberty)
+  const rock = new THREE.Mesh(new THREE.SphereGeometry(0.6, 16, 10), mat('#ead9a6', 1))
+  rock.scale.y = 0.45
+  rock.position.y = -0.05
+  liberty.add(rock)
+  const copper = mat('#7fb8a4', 0.7)
+  box(liberty, 0.36, 0.42, 0.36, mat('#c9c2b4'), 0, 0.18, 0)
+  cyl(liberty, 0.08, 0.14, 0.55, copper, 0, 0.6, 0, 10)
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.075, 10, 8), copper)
+  head.position.y = 1.22
+  liberty.add(head)
+  const arm = cyl(liberty, 0.025, 0.03, 0.34, copper, 0.1, 1.1, 0, 6)
+  arm.rotation.z = -0.25
+  const torch = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6), glow('#ffd76a', 1.4))
+  torch.position.set(0.15, 1.48, 0)
+  liberty.add(torch)
   return g
 }
-
-// ── Cornell Tech: the Roosevelt Island tram ─────────────────────────────────
 
 function pylon(parent: THREE.Object3D, x: number, y: number, z: number, height: number) {
   const steel = mat('#8f9aa3', 0.5, 0.4)
@@ -209,15 +235,11 @@ export function createTram(land: THREE.Vector3, heading: THREE.Vector3, length =
   const sea = land.clone().addScaledVector(heading, length)
   sea.y = 0.45
 
-  // The far stop: a little islet
-  const islet = new THREE.Mesh(new THREE.SphereGeometry(1.9, 20, 12), mat('#ead9a6', 1))
-  islet.position.set(sea.x, -0.25, sea.z)
-  islet.scale.y = 0.4
-  islet.receiveShadow = true
-  const turf = new THREE.Mesh(new THREE.SphereGeometry(1.35, 20, 12), mat('#86b96a', 1))
-  turf.position.set(sea.x, 0, sea.z)
-  turf.scale.y = 0.36
-  group.add(islet, turf)
+  // The far stop is Manhattan. The tram lands on its near shore.
+  const manhattan = createManhattan()
+  manhattan.position.copy(sea).setY(0).addScaledVector(heading, 1.3)
+  manhattan.rotation.y = rotationY
+  group.add(manhattan)
 
   pylon(group, land.x, land.y, land.z, HEIGHT)
   pylon(group, sea.x, sea.y, sea.z, HEIGHT)

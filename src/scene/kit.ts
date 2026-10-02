@@ -152,6 +152,24 @@ export function sign(
   return board
 }
 
+/**
+ * A white plate facing +z that shows the logo image at `file` (under public/).
+ * Until the image loads, or if it is missing, the plate shows `name` as text.
+ */
+export function logoPlate(
+  parent: THREE.Object3D, w: number, h: number, file: string, name: string, x = 0, y = 0, z = 0,
+) {
+  const plate = sign(parent, name, w, h, '#ffffff', '#111111', x, y, z)
+  const face = (plate.material as THREE.MeshStandardMaterial[])[4]
+  new THREE.TextureLoader().load(import.meta.env.BASE_URL + file, (tex) => {
+    tex.colorSpace = THREE.SRGBColorSpace
+    tex.anisotropy = 8
+    face.map = tex
+    face.needsUpdate = true
+  }, undefined, () => {})
+  return plate
+}
+
 // ── Deterministic randomness ────────────────────────────────────────────────
 
 export function rng(seed: number) {
