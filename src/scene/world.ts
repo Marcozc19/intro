@@ -5,6 +5,7 @@ import { createBuilding } from './buildings'
 import { createPath, pathPoints, plots } from './layout'
 import { createBirds, createDriftingClouds, createSailboat } from './life'
 import { createCloudBank, createDock, createLadder, createProjectCloud, createTrees, SKY_Y } from './props'
+import { createTram } from './signature'
 import { createSeabed, createTerrain, createWater } from './terrain'
 
 export type Level = 'ground' | 'sky'
@@ -98,9 +99,15 @@ export function createWorld(canvas: HTMLCanvasElement, labelsEl: HTMLElement, ev
       site.position.clone().setY(site.position.y + height + 0.7), { pos, target }, BUILDING_SCALE, 0.5 + i * 0.16)
   })
 
+  // Cornell Tech's tram runs from beside the campus out over the water.
+  const campus = places.findIndex((p) => p.style === 'cornell')
+  const tram = campus >= 0 ? createTram(sites[campus]) : null
+  if (tram) scene.add(tram.group)
+
   scene.add(createTrees([
     { points: pathPoints().filter((_, i) => i % 3 === 0), radius: 1.2 },
     { points: sites.map((s) => new THREE.Vector2(s.position.x, s.position.z)), radius: 3.4 },
+    { points: tram?.keepClear ?? [], radius: 1.8 },
   ]))
 
   const ladder = createLadder()

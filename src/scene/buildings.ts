@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { box, cyl, dome, gable, glow, mat, sign, windowedBox } from './kit'
 import { createSmoke } from './life'
+import { createFeedScreen, createNoteLogo, createPapers, createPlugs } from './signature'
 
 // One builder per place. Each draws into a group whose origin is the middle of
 // the plot at ground level, with the front door facing +z, and returns the
@@ -115,6 +116,10 @@ const cornell: Builder = (g) => {
   // Solar canopy floating over the main hall
   for (const [x, z] of [[-1.7, 1.1], [1.7, 1.1], [1.7, -1.1]]) cyl(g, 0.04, 0.04, 0.6, dark, x, 1.6, z, 8)
   box(g, 4, 0.08, 2.8, mat('#2d3b4f', 0.3, 0.5), 0.2, 2.2, 0)
+  // Research: papers circling above the hall, a few lighting up as recommendations
+  const papers = createPapers()
+  papers.position.set(0.7, 3.3, 0.1)
+  g.add(papers)
   door(g, 1.21, '#5b1010', 0.6, 0.75)
   sign(g, 'CORNELL TECH', 1.8, 0.24, '#b31b1b', '#ffffff', 0.4, 1, 1.22)
   return 4.6
@@ -157,7 +162,6 @@ const tiktok: Builder = (g) => {
   windowedBox(g, 2.1, 4.6, 2.1, '#15161a', '#33415a', 0, 1.5, 0, 0.5)
   windowedBox(g, 1.5, 1.2, 1.5, '#15161a', '#33415a', 0, 6.1, 0, 0.5)
   box(g, 1.6, 0.1, 1.6, dark, 0, 7.3, 0)
-  cyl(g, 0.03, 0.03, 0.9, mat('#c9ced6'), 0, 7.4, 0, 8)
   // The two brand colours run up opposite corners
   const cyan = glow('#25f4ee', 0.9)
   const red = glow('#fe2c55', 0.9)
@@ -169,9 +173,26 @@ const tiktok: Builder = (g) => {
     cyan.emissiveIntensity = 0.9 + Math.sin(t * 2) * 0.5
     red.emissiveIntensity = 0.9 - Math.sin(t * 2) * 0.5
   }
+  // The note logo, turning slowly on the roof so it reads from every side
+  const logo = createNoteLogo(cyan, red)
+  logo.position.y = 7.5
+  logo.userData.spin = 0.5
+  cyl(g, 0.22, 0.26, 0.1, dark, 0, 7.4, 0, 20)
+  g.add(logo)
+  // The feed, on a phone-shaped screen up the front of the tower
+  const feed = createFeedScreen(1.15, 2.3)
+  feed.position.set(0, 4.1, 1.09)
+  g.add(feed)
+  // Developer platform: outside apps plugging into both sides of the tower
+  const plugsRight = createPlugs([2.5, 3.7, 4.9], ['#25f4ee', '#fe2c55', '#ffffff'])
+  plugsRight.position.x = 1.05
+  const plugsLeft = createPlugs([3.1, 4.3], ['#fe2c55', '#25f4ee'])
+  plugsLeft.position.x = -1.05
+  plugsLeft.rotation.y = Math.PI
+  g.add(plugsRight, plugsLeft)
   door(g, 1.41, '#25f4ee', 0.6, 0.8)
   sign(g, 'TikTok', 1.3, 0.34, '#000000', '#ffffff', 0, 1.02, 1.42)
-  return 8.3
+  return 9.1
 }
 
 const builders: Record<string, Builder> = {
