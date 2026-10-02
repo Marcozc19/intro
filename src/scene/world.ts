@@ -2,10 +2,10 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { places, projects } from '../data'
 import { createBuilding } from './buildings'
-import { BALLOON, BRIDGE, createPaths, plots } from './layout'
+import { BALLOON, BRIDGE, CAMPUS_GATE, createPaths, plots } from './layout'
 import { createBirds, createDriftingClouds, createSailboat } from './life'
 import { createBalloon, createBridge, createCloudBank, createDock, createProjectCloud, createTrees, SKY_Y } from './props'
-import { createTram } from './signature'
+import { createTram, createTsinghuaGate } from './signature'
 import { createRiverFlow, createSeabed, createTerrain, createWater, groundHeight, ISLAND_R, riverX } from './terrain'
 
 export type Level = 'ground' | 'sky'
@@ -92,6 +92,7 @@ export function createWorld(canvas: HTMLCanvasElement, labelsEl: HTMLElement, ha
   }
 
   const sites = plots(places)
+  const clearings: THREE.Vector2[] = []
   const paths = createPaths(places, sites)
   scene.add(paths.mesh)
   places.forEach((place, i) => {
@@ -103,9 +104,17 @@ export function createWorld(canvas: HTMLCanvasElement, labelsEl: HTMLElement, ha
     group.rotation.y = site.rotationY
     scene.add(group)
     const front = new THREE.Vector3(Math.sin(site.rotationY), 0, Math.cos(site.rotationY))
-    const target = site.position.clone().setY(site.position.y + height * 0.45)
+    // Frame the building together with anything laid out in front of it.
+    const fore = (group.userData.forecourt ?? 0) * BUILDING_SCALE
+    const target = site.position.clone().addScaledVector(front, fore * 0.42).setY(site.position.y + height * (fore ? 0.28 : 0.45))
     // Look down fairly steeply, so a row of buildings in front doesn't hide this one.
-    const pos = target.clone().addScaledVector(front, 9 + height * 0.9).setY(target.y + 8.5 + height * 0.35)
+    const pos = target.clone().addScaledVector(front, 9 + height * 0.9 + fore * 0.45).setY(target.y + 8.5 + height * 0.35 + fore * 0.45)
+    // Lawns and plazas that belong to the building, in world coordinates
+    group.updateMatrixWorld()
+    for (const [cx, cz] of built.clearings) {
+      const p = group.localToWorld(new THREE.Vector3(cx * BUILDING_SCALE, 0, cz * BUILDING_SCALE))
+      clearings.push(new THREE.Vector2(p.x, p.z))
+    }
     addItem(place.id, 'ground', place.short ?? place.name, group,
       site.position.clone().setY(site.position.y + height + 0.7), { pos, target }, BUILDING_SCALE, 0.5 + i * 0.16)
   })
@@ -121,6 +130,26 @@ export function createWorld(canvas: HTMLCanvasElement, labelsEl: HTMLElement, ha
     keepClear.push(new THREE.Vector2(station.x, station.z))
   }
   keepClear.push(new THREE.Vector2(BALLOON.x, BALLOON.z))
+  // Tsinghua's gate stands on the lawn at the front left of its building, at an
+  // angle to it. Clicking it selects Tsinghua.
+  const gateOwner = places.find((p) => p.style === 'tsinghua')
+  if (gateOwner) {
+    const gate = createTsinghuaGate()
+    gate.position.set(CAMPUS_GATE.x, groundHeight(CAMPUS_GATE.x, CAMPUS_GATE.z), CAMPUS_GATE.z)
+    gate.rotation.y = CAMPUS_GATE.rotationY
+    gate.scale.setScalar(CAMPUS_GATE.scale)
+    gate.userData.pick = gateOwner.id
+    pickables.push(gate)
+    scene.add(gate)
+    // Keep trees off the gate and the lawn in front of it
+    const across = new THREE.Vector2(Math.cos(CAMPUS_GATE.rotationY), -Math.sin(CAMPUS_GATE.rotationY))
+    const ahead = new THREE.Vector2(Math.sin(CAMPUS_GATE.rotationY), Math.cos(CAMPUS_GATE.rotationY))
+    for (const along of [-1.4, 0, 1.4]) {
+      for (const out of [0, 1.6]) {
+        keepClear.push(new THREE.Vector2(CAMPUS_GATE.x, CAMPUS_GATE.z).addScaledVector(across, along).addScaledVector(ahead, out))
+      }
+    }
+  }
   const riverBanks: THREE.Vector2[] = []
   for (let z = -ISLAND_R; z <= ISLAND_R; z += 0.8) riverBanks.push(new THREE.Vector2(riverX(z), z))
 
@@ -129,6 +158,7 @@ export function createWorld(canvas: HTMLCanvasElement, labelsEl: HTMLElement, ha
     { points: sites.map((s) => new THREE.Vector2(s.position.x, s.position.z)), radius: 3.4 },
     { points: riverBanks, radius: 2.5 },
     { points: keepClear, radius: 2.4 },
+    { points: clearings, radius: 2 },
   ]))
 
   // The hot air balloon is the only way up. It waits at the far end of

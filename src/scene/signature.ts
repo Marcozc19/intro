@@ -114,6 +114,164 @@ export function createNoteLogo(cyan: THREE.Material, red: THREE.Material): THREE
   return g
 }
 
+// ── Tsinghua: the flag and the gate ─────────────────────────────────────────
+
+/**
+ * A white banner carrying the image at `file` (under public/), flying from a
+ * pole at the origin towards +x and rippling in the wind. The image is
+ * printed the right way round on both sides.
+ */
+export function createBanner(file: string, w: number, h: number): THREE.Group {
+  const g = new THREE.Group()
+  const geo = new THREE.PlaneGeometry(w, h, 16, 1)
+  geo.translate(w / 2, 0, 0)
+
+  // The image has a transparent background, so it is printed onto white cloth
+  // here, at a higher resolution than the file so its edges stay smooth.
+  const c = document.createElement('canvas')
+  c.width = 1024
+  c.height = Math.round((1024 * h) / w)
+  const ctx = c.getContext('2d')!
+  ctx.fillStyle = '#ffffff'
+  ctx.fillRect(0, 0, c.width, c.height)
+  const front = new THREE.CanvasTexture(c)
+  const back = new THREE.CanvasTexture(c)
+  back.wrapS = THREE.RepeatWrapping
+  back.repeat.x = -1 // mirrored, so it reads correctly from behind
+  back.offset.x = 1
+  for (const tex of [front, back]) {
+    tex.colorSpace = THREE.SRGBColorSpace
+    tex.anisotropy = 8
+  }
+  const image = new Image()
+  image.onload = () => {
+    const scale = Math.min((c.width * 0.9) / image.width, (c.height * 0.82) / image.height)
+    const iw = image.width * scale
+    const ih = image.height * scale
+    ctx.imageSmoothingQuality = 'high'
+    ctx.drawImage(image, (c.width - iw) / 2, (c.height - ih) / 2, iw, ih)
+    front.needsUpdate = back.needsUpdate = true
+  }
+  image.src = import.meta.env.BASE_URL + file
+
+  for (const [map, side] of [[front, THREE.FrontSide], [back, THREE.BackSide]] as const) {
+    const cloth = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map, side, roughness: 0.85 }))
+    cloth.castShadow = side === THREE.FrontSide
+    g.add(cloth)
+  }
+  const pos = geo.attributes.position
+  g.userData.tick = (t: number) => {
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i)
+      pos.setZ(i, Math.sin(x * 3.2 - t * 3.6) * 0.1 * (x / w))
+    }
+    pos.needsUpdate = true
+    geo.computeVertexNormals()
+  }
+  return g
+}
+
+/** A slab of wall, `depth` thick, cut from an outline with an arched opening through it. */
+function archedWall(outline: THREE.Shape, opening: { x: number; w: number; spring: number }, depth: number, material: THREE.Material) {
+  const r = opening.w / 2
+  const hole = new THREE.Path()
+  // The opening starts a hair above the ground so it stays inside the outline.
+  hole.moveTo(opening.x - r, 0.015)
+  hole.lineTo(opening.x - r, opening.spring)
+  hole.absarc(opening.x, opening.spring, r, Math.PI, 0, true)
+  hole.lineTo(opening.x + r, 0.015)
+  hole.closePath()
+  outline.holes.push(hole)
+  const geo = new THREE.ExtrudeGeometry(outline, { depth, bevelEnabled: false, curveSegments: 20 })
+  geo.translate(0, 0, -depth / 2)
+  const mesh = new THREE.Mesh(geo, material)
+  mesh.castShadow = true
+  mesh.receiveShadow = true
+  return mesh
+}
+
+/**
+ * The Second Gate (二校门): white marble, a tall arch between paired columns
+ * on stone pedestals with brick piers behind, a stepped parapet with the
+ * 清華園 plaque, and a lower arched wing swept up to it on either side.
+ * Origin is the middle of the gate at ground level; it faces +z.
+ */
+export function createTsinghuaGate(): THREE.Group {
+  const g = new THREE.Group()
+  g.name = 'tsinghua-gate'
+  const marble = mat('#f4f1ea', 0.7)
+  const brick = mat('#8f6f5b')
+  const stone = mat('#b8b2a7')
+
+  // Centre: the main arch
+  const centre = new THREE.Shape()
+  centre.moveTo(-0.46, 0)
+  centre.lineTo(0.46, 0)
+  centre.lineTo(0.46, 1.58)
+  centre.lineTo(-0.46, 1.58)
+  centre.closePath()
+  g.add(archedWall(centre, { x: 0, w: 0.64, spring: 0.98 }, 0.3, marble))
+
+  for (const side of [-1, 1]) {
+    const x = side * 0.68
+    // Pier: stone pedestal, brick behind, a pair of columns in front
+    box(g, 0.46, 0.5, 0.52, stone, x, 0, 0)
+    box(g, 0.42, 1.08, 0.34, brick, x, 0.5, -0.04)
+    for (const dx of [-0.11, 0.11]) {
+      cyl(g, 0.058, 0.066, 1, marble, x + dx, 0.5, 0.17, 14)
+      box(g, 0.16, 0.06, 0.16, marble, x + dx, 1.5, 0.17)
+    }
+    box(g, 0.2, 0.14, 0.02, brick, x, 1.64, 0.21) // brick panel in the frieze
+
+    // Wing: a lower wall with a small arch, its top swept up towards the centre
+    const wing = new THREE.Shape()
+    wing.moveTo(0, 0)
+    wing.lineTo(0.78, 0)
+    wing.lineTo(0.78, 0.92)
+    wing.quadraticCurveTo(0.3, 0.95, 0, 1.42)
+    wing.closePath()
+    const wall = archedWall(wing, { x: 0.44, w: 0.3, spring: 0.46 }, 0.22, marble)
+    wall.position.x = side * 0.9
+    wall.scale.x = side
+    g.add(wall)
+    // End pier with a carved scroll on top
+    const end = side * 1.8
+    box(g, 0.26, 0.74, 0.34, brick, end, 0, 0)
+    box(g, 0.32, 0.1, 0.4, marble, end, 0.74, 0)
+    box(g, 0.24, 0.2, 0.3, marble, end, 0.84, 0)
+    const scroll = cyl(g, 0.1, 0.1, 0.24, marble, end - side * 0.16, 0.96, 0, 16)
+    scroll.rotation.x = Math.PI / 2
+  }
+
+  // Entablature, cornice and the stepped parapet
+  box(g, 1.86, 0.24, 0.4, marble, 0, 1.58, 0)
+  box(g, 2.08, 0.07, 0.6, marble, 0, 1.82, 0)
+  box(g, 1.7, 0.18, 0.36, marble, 0, 1.89, 0)
+  box(g, 0.98, 0.1, 0.34, marble, 0, 2.07, 0)
+  for (const x of [-0.72, 0.72]) box(g, 0.3, 0.3, 0.4, marble, x, 1.89, 0)
+  cyl(g, 0.012, 0.016, 0.95, mat('#6d6f73', 0.4, 0.6), 0, 2.17, 0, 8)
+
+  // The plaque. It reads right to left, as on the gate itself.
+  const c = document.createElement('canvas')
+  c.width = 512
+  c.height = 128
+  const ctx = c.getContext('2d')!
+  ctx.fillStyle = '#f7f5ef'
+  ctx.fillRect(0, 0, 512, 128)
+  ctx.fillStyle = '#2b2622'
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.font = '700 88px "Kaiti SC", "STKaiti", "Songti SC", "Noto Serif CJK SC", serif'
+  ;['園', '華', '清'].forEach((ch, i) => ctx.fillText(ch, 96 + i * 160, 68))
+  const tex = new THREE.CanvasTexture(c)
+  tex.colorSpace = THREE.SRGBColorSpace
+  tex.anisotropy = 8
+  const plaque = new THREE.Mesh(new THREE.PlaneGeometry(0.78, 0.195), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.8 }))
+  plaque.position.set(0, 1.7, 0.205)
+  g.add(plaque)
+  return g
+}
+
 // ── Cornell Tech: the Roosevelt Island tram ─────────────────────────────────
 
 /**

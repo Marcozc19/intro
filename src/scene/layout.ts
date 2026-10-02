@@ -12,7 +12,7 @@ export type Plot = { position: THREE.Vector3; rotationY: number }
 type Spot = [x: number, z: number, rotationY: number]
 
 const CAMPUS: Spot[] = [
-  [-11.6, 8.2, 0.45],
+  [-12.6, 5.2, 0.3],
   [-11.2, -5.5, 0.35],
   [-13.6, 1.4, 0.4],
 ]
@@ -32,6 +32,11 @@ const DOWNTOWN: Spot[] = [
 /** Where the hot air balloon is moored: the far end of downtown. */
 export const BALLOON = { x: 4.6, z: -11.6 }
 export const BRIDGE = { z: 1.2, west: riverX(1.2) - 2.6, east: riverX(1.2) + 2.6 }
+/**
+ * The Tsinghua gate stands on the lawn at the front left of the first campus
+ * building, turned at an angle to it and clear of the paths.
+ */
+export const CAMPUS_GATE = { x: -13.7, z: 10, rotationY: 0.75, scale: 0.85 }
 
 function plot([x, z, rotationY]: Spot): Plot {
   return { position: new THREE.Vector3(x, groundHeight(x, z), z), rotationY }

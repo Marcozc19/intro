@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import { box, cyl, dome, gable, glow, logoPlate, mat, sign, windowedBox } from './kit'
 import { createSmoke } from './life'
-import { createFeedScreen, createNoteLogo } from './signature'
+import { createBanner, createFeedScreen, createNoteLogo } from './signature'
 
 // One builder per place. Each draws into a group whose origin is the middle of
 // the plot at ground level, with the front door facing +z, and returns the
@@ -23,6 +23,8 @@ function door(g: THREE.Group, z: number, color = '#3a2c25', w = 0.42, h = 0.62) 
   box(g, w, h, 0.06, mat(color), 0, 0.1, z)
 }
 
+// The auditorium, with the university banner flying from the dome. (The
+// Second Gate stands beside it; the world places that.)
 const tsinghua: Builder = (g) => {
   plinth(g, 3.4, 2.6)
   box(g, 3.4, 1.7, 2.6, mat('#a9472f'), 0, 0.1, 0)
@@ -35,10 +37,13 @@ const tsinghua: Builder = (g) => {
   // Drum and dome
   cyl(g, 1.05, 1.05, 0.5, mat('#a9472f'), 0, 1.94, 0, 32)
   dome(g, 1.1, mat('#6f9288', 0.6, 0.2), 0, 2.44, 0)
-  cyl(g, 0.04, 0.04, 0.5, white, 0, 3.5, 0, 8)
-  door(g, 1.31, '#4a2f6b', 0.5, 0.8)
-  sign(g, 'TSINGHUA', 1.6, 0.22, '#660874', '#ffffff', 0, 1.3, 1.33)
-  return 4.1
+  door(g, 1.31, '#3a2c25', 0.5, 0.8)
+  // The university banner, flying from a tall pole on the dome
+  cyl(g, 0.035, 0.04, 1.55, white, 0, 3.5, 0, 8)
+  const banner = createBanner('logos/tsinghua-banner.png', 2.6, 1)
+  banner.position.set(0.02, 4.5, 0)
+  g.add(banner)
+  return 5.25
 }
 
 const factory: Builder = (g) => {
@@ -263,10 +268,11 @@ const builders: Record<string, Builder> = {
   tsinghua, factory, wework, pico, cornell, studio, echo3d, tiktok,
 }
 
-export function createBuilding(style: string): { group: THREE.Group; height: number } {
+/** `clearings` are spots around the building (in its own coordinates) that trees should keep off. */
+export function createBuilding(style: string): { group: THREE.Group; height: number; clearings: [number, number][] } {
   const group = new THREE.Group()
   const build = builders[style]
   if (!build) throw new Error(`No builder for style "${style}"`)
   const height = build(group)
-  return { group, height }
+  return { group, height, clearings: group.userData.clearings ?? [] }
 }
