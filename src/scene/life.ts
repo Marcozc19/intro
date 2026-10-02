@@ -30,7 +30,7 @@ export function createSailboat(): THREE.Group {
 
   const place = (t: number) => {
     const a = 1.1 + t * 0.06
-    const r = 27 + Math.sin(a * 3) * 1.5
+    const r = 30 + Math.sin(a * 3) * 1.5
     boat.position.set(Math.cos(a) * r, 0.05 + Math.sin(t * 1.3) * 0.05, Math.sin(a) * r)
     boat.rotation.set(Math.sin(t * 1.1) * 0.05, Math.atan2(-Math.sin(a), Math.cos(a)), Math.sin(t * 0.9) * 0.07)
   }

@@ -82,6 +82,38 @@ export function createDock(): THREE.Group {
   return g
 }
 
+// ── Bridge ──────────────────────────────────────────────────────────────────
+
+/** An arched footbridge running east-west across the river. */
+export function createBridge(west: number, east: number, z: number): THREE.Group {
+  const g = new THREE.Group()
+  g.name = 'bridge'
+  const stone = mat('#d6cfbf')
+  const wood = mat('#a9774c')
+  const SEGMENTS = 9
+  const span = east - west
+  const deckY = (u: number) => groundHeight(west, z) + 0.02 + Math.sin(u * Math.PI) * 0.55
+  for (let i = 0; i < SEGMENTS; i++) {
+    const u0 = i / SEGMENTS
+    const u1 = (i + 1) / SEGMENTS
+    const rise = deckY(u1) - deckY(u0)
+    const run = span / SEGMENTS
+    const piece = new THREE.Group()
+    piece.position.set(west + span * (u0 + u1) / 2, (deckY(u0) + deckY(u1)) / 2, z)
+    piece.rotation.z = Math.atan2(rise, run)
+    const len = Math.hypot(run, rise) + 0.04
+    box(piece, len, 0.12, 1.3, stone, 0, -0.06, 0)
+    for (const side of [-0.6, 0.6]) {
+      box(piece, len, 0.05, 0.06, wood, 0, 0.42, side)
+      if (i % 2 === 0) box(piece, 0.07, 0.42, 0.07, wood, 0, 0.03, side)
+    }
+    g.add(piece)
+  }
+  // Piers standing in the water
+  for (const u of [0.3, 0.7]) box(g, 0.3, 1.2, 1.1, stone, west + span * u, -0.7, z)
+  return g
+}
+
 // ── Ladder ──────────────────────────────────────────────────────────────────
 
 export function createLadder(): THREE.Group {

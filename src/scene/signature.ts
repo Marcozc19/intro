@@ -1,6 +1,5 @@
 import * as THREE from 'three'
 import { box, cyl, glow, mat } from './kit'
-import type { Plot } from './layout'
 import { groundHeight } from './terrain'
 
 // Signature props: one animated set piece per experience that shows what the
@@ -197,21 +196,17 @@ function pylon(parent: THREE.Object3D, x: number, y: number, z: number, height: 
 }
 
 /**
- * A cable from beside the campus out to a small islet, with a red cabin that
- * shuttles back and forth. Built in world space so it doesn't scale with the
- * building. Returns the spots on land that trees should keep clear of.
+ * A cable from a station on land out to a small islet, with a red cabin that
+ * shuttles back and forth. Built in world space so it doesn't scale with a
+ * building. `land` is where the station stands and `heading` the way it runs.
  */
-export function createTram(site: Plot): { group: THREE.Group; keepClear: THREE.Vector2[] } {
+export function createTram(land: THREE.Vector3, heading: THREE.Vector3, length = 8.5): THREE.Group {
   const group = new THREE.Group()
   group.name = 'tram'
-  const front = new THREE.Vector3(Math.sin(site.rotationY), 0, Math.cos(site.rotationY))
-  // The tram sits on the building's left (seen from the front), clear of the detail panel.
-  const side = new THREE.Vector3(-front.z, 0, front.x)
+  const rotationY = Math.atan2(heading.x, heading.z)
   const HEIGHT = 3.4
-
-  const land = site.position.clone().addScaledVector(side, 4.3).addScaledVector(front, -0.4)
-  land.y = groundHeight(land.x, land.z)
-  const sea = land.clone().addScaledVector(front, 11.5)
+  land = land.clone().setY(groundHeight(land.x, land.z))
+  const sea = land.clone().addScaledVector(heading, length)
   sea.y = 0.45
 
   // The far stop: a little islet
@@ -228,8 +223,8 @@ export function createTram(site: Plot): { group: THREE.Group; keepClear: THREE.V
   pylon(group, sea.x, sea.y, sea.z, HEIGHT)
   // Boarding platform on the campus side
   const platform = box(group, 1.1, 0.25, 1.5, mat('#d6cfbf'), land.x, land.y, land.z)
-  platform.rotation.y = site.rotationY
-  platform.position.addScaledVector(side, -0.75)
+  platform.rotation.y = rotationY
+  platform.position.addScaledVector(heading, -0.9)
 
   const a = land.clone().setY(land.y + HEIGHT)
   const b = sea.clone().setY(sea.y + HEIGHT)
@@ -239,7 +234,7 @@ export function createTram(site: Plot): { group: THREE.Group; keepClear: THREE.V
   group.add(cable)
 
   const cabin = new THREE.Group()
-  cabin.rotation.y = site.rotationY
+  cabin.rotation.y = rotationY
   const red = mat('#c8102e', 0.5)
   box(cabin, 0.46, 0.2, 0.8, red, 0, -0.82, 0)
   box(cabin, 0.44, 0.22, 0.78, mat('#bfe3ea', 0.2, 0.3), 0, -0.62, 0)
@@ -261,5 +256,5 @@ export function createTram(site: Plot): { group: THREE.Group; keepClear: THREE.V
   }
   place(0)
   group.userData.tick = place
-  return { group, keepClear: [new THREE.Vector2(land.x, land.z)] }
+  return group
 }

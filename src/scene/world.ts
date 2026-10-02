@@ -2,11 +2,11 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { places, projects } from '../data'
 import { createBuilding } from './buildings'
-import { createPath, pathPoints, plots } from './layout'
+import { BRIDGE, createPaths, plots } from './layout'
 import { createBirds, createDriftingClouds, createSailboat } from './life'
-import { createCloudBank, createDock, createLadder, createProjectCloud, createTrees, SKY_Y } from './props'
+import { createBridge, createCloudBank, createDock, createLadder, createProjectCloud, createTrees, SKY_Y } from './props'
 import { createTram } from './signature'
-import { createSeabed, createTerrain, createWater } from './terrain'
+import { createRiverFlow, createSeabed, createTerrain, createWater, ISLAND_R, riverX } from './terrain'
 
 export type Level = 'ground' | 'sky'
 
@@ -63,7 +63,8 @@ export function createWorld(canvas: HTMLCanvasElement, labelsEl: HTMLElement, ev
   const camera = new THREE.PerspectiveCamera(40, 1, 0.5, 400)
 
   // ── World ─────────────────────────────────────────────────────────────────
-  scene.add(createTerrain(), createSeabed(), createWater(), createPath(), createDock())
+  scene.add(createTerrain(), createSeabed(), createWater(), createRiverFlow(), createDock())
+  scene.add(createBridge(BRIDGE.west, BRIDGE.east, BRIDGE.z))
 
   const items: Item[] = []
   const pickables: THREE.Object3D[] = []
@@ -83,7 +84,9 @@ export function createWorld(canvas: HTMLCanvasElement, labelsEl: HTMLElement, ev
     items.push({ id, level, object, anchor, pose, label, baseScale, hover: 0, appearAt: reducedMotion ? 0 : appearAt })
   }
 
-  const sites = plots(places.length)
+  const sites = plots(places)
+  const paths = createPaths(places, sites)
+  scene.add(paths.mesh)
   places.forEach((place, i) => {
     const built = createBuilding(place.style)
     const group = built.group
@@ -94,20 +97,30 @@ export function createWorld(canvas: HTMLCanvasElement, labelsEl: HTMLElement, ev
     scene.add(group)
     const front = new THREE.Vector3(Math.sin(site.rotationY), 0, Math.cos(site.rotationY))
     const target = site.position.clone().setY(site.position.y + height * 0.45)
-    const pos = target.clone().addScaledVector(front, 12 + height).setY(target.y + 6 + height * 0.35)
+    // Look down fairly steeply, so a row of buildings in front doesn't hide this one.
+    const pos = target.clone().addScaledVector(front, 9 + height * 0.9).setY(target.y + 8.5 + height * 0.35)
     addItem(place.id, 'ground', place.short ?? place.name, group,
       site.position.clone().setY(site.position.y + height + 0.7), { pos, target }, BUILDING_SCALE, 0.5 + i * 0.16)
   })
 
-  // Cornell Tech's tram runs from beside the campus out over the water.
+  // Cornell Tech's tram: a station on the building's seaward side, heading out to sea.
+  const keepClear: THREE.Vector2[] = [new THREE.Vector2(BRIDGE.west - 0.5, BRIDGE.z), new THREE.Vector2(BRIDGE.east + 0.5, BRIDGE.z)]
   const campus = places.findIndex((p) => p.style === 'cornell')
-  const tram = campus >= 0 ? createTram(sites[campus]) : null
-  if (tram) scene.add(tram.group)
+  if (campus >= 0) {
+    const site = sites[campus]
+    const left = new THREE.Vector3(-Math.cos(site.rotationY), 0, Math.sin(site.rotationY))
+    const station = site.position.clone().addScaledVector(left, 3.9)
+    scene.add(createTram(station, new THREE.Vector3(station.x, 0, station.z).normalize()))
+    keepClear.push(new THREE.Vector2(station.x, station.z))
+  }
+  const riverBanks: THREE.Vector2[] = []
+  for (let z = -ISLAND_R; z <= ISLAND_R; z += 0.8) riverBanks.push(new THREE.Vector2(riverX(z), z))
 
   scene.add(createTrees([
-    { points: pathPoints().filter((_, i) => i % 3 === 0), radius: 1.2 },
+    { points: paths.points.filter((_, i) => i % 2 === 0), radius: 1.2 },
     { points: sites.map((s) => new THREE.Vector2(s.position.x, s.position.z)), radius: 3.4 },
-    { points: tram?.keepClear ?? [], radius: 1.8 },
+    { points: riverBanks, radius: 2.5 },
+    { points: keepClear, radius: 1.8 },
   ]))
 
   const ladder = createLadder()
@@ -157,7 +170,7 @@ export function createWorld(canvas: HTMLCanvasElement, labelsEl: HTMLElement, ev
 
   function overview(l: Level): Pose {
     const target = l === 'ground' ? new THREE.Vector3(0, 2.5, 0) : new THREE.Vector3(0, SKY_Y, 1.5)
-    const offset = l === 'ground' ? new THREE.Vector3(0, 25, 48) : new THREE.Vector3(0, 11, 21)
+    const offset = l === 'ground' ? new THREE.Vector3(0, 26, 50) : new THREE.Vector3(0, 11, 21)
     // Pull back on narrow screens so the whole island still fits.
     offset.multiplyScalar(Math.max(1, 1.35 / aspect))
     return { pos: target.clone().add(offset), target }
