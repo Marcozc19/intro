@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Marco Zhuang</title>
+    <meta name="description" content="Marco Zhuang — Product Manager at TikTok. An island of where I've studied and worked, and a sky of what I'm building." />
+  </head>
+  <body>
+    <canvas id="scene" aria-label="Interactive 3D island. Use the list view for a text version."></canvas>
+    <div id="labels"></div>
+
+    <header class="intro">
+      <h1>Marco <br />Zhuang<span class="dot">.</span></h1>
+      <p class="tagline"></p>
+      <p class="links">
+        <a id="link-linkedin" target="_blank" rel="noopener">LinkedIn</a>
+        <a id="link-github" target="_blank" rel="noopener">GitHub</a>
+        <button id="open-list" type="button">List view</button>
+      </p>
+    </header>
+
+    <nav class="levels" aria-label="Level">
+      <button type="button" data-level="ground">Island</button>
+      <button type="button" data-level="sky">Clouds</button>
+    </nav>
+    <p class="hint">Drag to look around · click a building · climb the ladder</p>
+
+    <aside id="panel" aria-live="polite" hidden>
+      <button class="close" type="button" aria-label="Close">×</button>
+      <div class="panel-body"></div>
+    </aside>
+
+    <section id="list" hidden>
+      <button class="close" type="button" aria-label="Close list view">×</button>
+      <div class="list-body"></div>
+    </section>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

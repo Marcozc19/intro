@@ -1,0 +1,120 @@
+:root {
+  --bg: #e9f3f2;
+  --ink: #1f3d3a;
+  --ink-soft: #5c7572;
+  --card: #ffffff;
+  --accent: #8fb5ac;
+  --line: #d8e5e2;
+  --sans: 'Helvetica Neue', Helvetica, Arial, system-ui, sans-serif;
+  --serif: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+}
+
+button { font: inherit; color: inherit; cursor: pointer; }
+
+#scene {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  cursor: grab;
+  touch-action: none;
+}
+
+/* ── Floating labels ───────────────────────────────────────────────────── */
+#labels { position: fixed; inset: 0; pointer-events: none; overflow: hidden; }
+
+.label {
+  position: absolute;
+  left: 0;
+  top: 0;
+  padding: 3px 9px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow: 0 1px 4px rgba(31, 61, 58, 0.18);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: auto;
+  transition: background 0.15s, color 0.15s, opacity 0.2s;
+}
+.label.hover, .label.selected, .label:hover, .label:focus-visible { background: var(--ink); color: #fff; outline: none; }
+#labels.has-selection .label:not(.selected) { opacity: 0.35; }
+
+/* ── Intro block ───────────────────────────────────────────────────────── */
+.intro { position: fixed; left: clamp(20px, 5vw, 90px); top: 50%; transform: translateY(-55%); pointer-events: none; }
+.intro h1 { margin: 0; font-family: var(--serif); font-weight: 500; font-size: clamp(48px, 7vw, 104px); line-height: 0.95; letter-spacing: -0.02em; }
+.intro .dot { color: var(--accent); }
+.intro .tagline { margin: 22px 0 14px; font-size: 15px; }
+.intro .links { margin: 0; display: flex; gap: 14px; align-items: center; pointer-events: auto; }
+.intro a, .intro .links button { font-size: 14px; color: var(--ink); background: none; border: 0; padding: 0; text-decoration: underline; text-underline-offset: 3px; }
+.intro a:hover, .intro .links button:hover { color: var(--ink-soft); }
+
+.intro, .hint { transition: opacity 0.4s; }
+body.has-selection .intro, body.has-selection .hint { opacity: 0; pointer-events: none; }
+body.has-selection .intro .links { pointer-events: none; }
+
+/* ── Level switch ──────────────────────────────────────────────────────── */
+.levels { position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%); display: flex; gap: 4px; padding: 4px; border-radius: 999px; background: rgba(255, 255, 255, 0.9); box-shadow: 0 2px 10px rgba(31, 61, 58, 0.12); }
+.levels button { border: 0; border-radius: 999px; padding: 8px 18px; background: none; font-size: 14px; }
+.levels button[aria-pressed='true'] { background: var(--ink); color: #fff; }
+.hint { position: fixed; left: 50%; bottom: 74px; transform: translateX(-50%); margin: 0; font-size: 12px; color: var(--ink-soft); white-space: nowrap; pointer-events: none; }
+
+/* ── Detail panel ──────────────────────────────────────────────────────── */
+#panel {
+  position: fixed;
+  right: 24px;
+  top: 24px;
+  bottom: 24px;
+  width: min(400px, calc(100vw - 48px));
+  padding: 28px 28px 24px;
+  overflow-y: auto;
+  background: var(--card);
+  border-radius: 18px;
+  box-shadow: 0 10px 40px rgba(31, 61, 58, 0.18);
+}
+#panel[hidden], #list[hidden] { display: none; }
+.close { position: absolute; right: 14px; top: 12px; width: 34px; height: 34px; border: 0; border-radius: 50%; background: none; font-size: 24px; line-height: 1; color: var(--ink-soft); }
+.close:hover { background: var(--bg); }
+
+.kind { margin: 0 0 6px; font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); }
+.place-name { margin: 0 34px 18px 0; font-family: var(--serif); font-weight: 500; font-size: 30px; line-height: 1.1; }
+.role { padding: 16px 0; border-top: 1px solid var(--line); }
+.role h3 { margin: 0 0 4px; font-size: 17px; }
+.role .meta { margin: 0; font-size: 13px; color: var(--ink-soft); }
+.role ul { margin: 10px 0 0; padding-left: 18px; font-size: 14px; line-height: 1.5; }
+.role li + li { margin-top: 6px; }
+.summary { font-size: 15px; line-height: 1.55; }
+.placeholder-note { display: inline-block; margin-bottom: 8px; padding: 2px 8px; border-radius: 6px; background: #fff3cd; font-size: 12px; font-weight: 600; }
+
+/* ── List view ─────────────────────────────────────────────────────────── */
+#list { position: fixed; inset: 0; overflow-y: auto; background: var(--bg); padding: 56px 20px 80px; }
+#list .close { position: fixed; right: 20px; top: 16px; }
+.list-body { max-width: 680px; margin: 0 auto; }
+.list-body h1 { font-family: var(--serif); font-weight: 500; font-size: 44px; margin: 0 0 4px; }
+.list-body h2 { margin: 40px 0 8px; font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); }
+.list-body article { padding: 14px 0; border-top: 1px solid var(--line); }
+.list-body article h3 { margin: 0 0 2px; font-size: 18px; }
+.list-body article .role { border: 0; padding: 6px 0 0; }
+.list-body article .role h3 { font-size: 15px; font-weight: 500; }
+
+@media (max-width: 900px) {
+  .intro { top: 20px; transform: none; }
+  .intro h1 { font-size: 40px; }
+  .intro h1 br { display: none; }
+  .intro .tagline { margin: 8px 0 8px; font-size: 13px; }
+  .hint { display: none; }
+  #panel { left: 12px; right: 12px; top: auto; bottom: 12px; width: auto; max-height: 55vh; }
+}
