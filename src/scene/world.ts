@@ -5,7 +5,7 @@ import { createBuilding } from './buildings'
 import { BALLOON, BRIDGE, CAMPUS_GATE, createPaths, plots } from './layout'
 import { createBirds, createDriftingClouds, createSailboat } from './life'
 import { createBalloon, createBridge, createCloudBank, createDock, createProjectCloud, createTrees, SKY_Y } from './props'
-import { createTram, createTsinghuaGate } from './signature'
+import { createFerry, createPudong, createTram, createTsinghuaGate } from './signature'
 import { createRiverFlow, createSeabed, createTerrain, createWater, groundHeight, ISLAND_R, riverX } from './terrain'
 
 export type Level = 'ground' | 'sky'
@@ -34,6 +34,7 @@ type Events = {
 
 const BG = '#e9f3f2'
 const BUILDING_SCALE = 1.3
+const PUDONG = { x: 20.4, z: -17.2 }
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
 const smooth = (a: number, b: number, x: number) => {
   const t = Math.min(1, Math.max(0, (x - a) / (b - a)))
@@ -130,6 +131,25 @@ export function createWorld(canvas: HTMLCanvasElement, labelsEl: HTMLElement, ha
     keepClear.push(new THREE.Vector2(station.x, station.z))
   }
   keepClear.push(new THREE.Vector2(BALLOON.x, BALLOON.z))
+  // WeWork was in Shanghai: a miniature Pudong skyline sits off the north-east
+  // shore, with a ferry crossing to it. It is scenery only, not clickable.
+  const shanghai = places.find((p) => p.style === 'wework')
+  if (shanghai) {
+    const pudong = createPudong()
+    pudong.position.set(PUDONG.x, 0, PUDONG.z)
+    pudong.rotation.y = Math.atan2(-PUDONG.x, -PUDONG.z) // waterfront faces the island
+    // The ferry runs bow-first right up to each shore. Its far stop is just off
+    // Pudong's waterfront; its near stop is found by walking in from the sea
+    // until the island's beach is reached.
+    const BOW = 0.8 // from the middle of the boat to its bow
+    const quay = new THREE.Vector3(PUDONG.x, 0, PUDONG.z).multiplyScalar(1 - (3.06 + BOW) / Math.hypot(PUDONG.x, PUDONG.z))
+    const jetty = quay.clone()
+    let beach = ISLAND_R + 4
+    while (beach > ISLAND_R - 6 && groundHeight(jetty.setLength(beach).x, jetty.z) < -0.04) beach -= 0.05
+    jetty.setLength(beach + BOW)
+    scene.add(pudong, createFerry(jetty, quay))
+  }
+
   // Tsinghua's gate stands on the lawn at the front left of its building, at an
   // angle to it. Clicking it selects Tsinghua.
   const gateOwner = places.find((p) => p.style === 'tsinghua')

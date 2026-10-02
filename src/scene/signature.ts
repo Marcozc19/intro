@@ -272,6 +272,193 @@ export function createTsinghuaGate(): THREE.Group {
   return g
 }
 
+// ── WeWork: the facade as a live bar chart (business intelligence) ──────────
+
+/**
+ * A grid of window panes facing +z, `w` wide and `h` tall. Each column is a
+ * bar: its windows light from the bottom up to the bar's value, and every few
+ * seconds the values change and the bars slide to their new heights.
+ */
+export function createChartFacade(w: number, h: number, columns = 7, rows = 6): THREE.InstancedMesh {
+  const GAP = 0.07
+  const cw = w / columns
+  const ch = h / rows
+  const panes = new THREE.InstancedMesh(
+    new THREE.PlaneGeometry(cw - GAP, ch - GAP),
+    new THREE.MeshBasicMaterial({ color: '#ffffff' }),
+    columns * rows,
+  )
+  const m = new THREE.Object3D()
+  for (let c = 0; c < columns; c++) {
+    for (let r = 0; r < rows; r++) {
+      m.position.set(-w / 2 + cw * (c + 0.5), ch * (r + 0.5), 0)
+      m.updateMatrix()
+      panes.setMatrixAt(c * rows + r, m.matrix)
+    }
+  }
+  const DARK = new THREE.Color('#27303a')
+  const LIT = new THREE.Color('#ffd98a')
+  const PEAK = new THREE.Color('#ff8f5a') // the tallest bar stands out
+  const color = new THREE.Color()
+  const PERIOD = 3.2
+  /** Bar heights (in rows) for one refresh of the dashboard. */
+  const values = (step: number) => {
+    const rand = rng(4200 + step)
+    return Array.from({ length: columns }, () => 1 + rand() * (rows - 1))
+  }
+  const place = (t: number) => {
+    const step = Math.floor(t / PERIOD)
+    const from = values(step)
+    const to = values(step + 1)
+    // Hold, then glide to the next values over the last third of the period
+    const k = ease(clamp01((t / PERIOD - step - 0.62) / 0.38))
+    const bars = from.map((v, i) => v + (to[i] - v) * k)
+    const tallest = bars.indexOf(Math.max(...bars))
+    for (let c = 0; c < columns; c++) {
+      for (let r = 0; r < rows; r++) {
+        const fill = clamp01(bars[c] - r) // 1 = fully lit, a fraction = the bar's leading edge
+        color.copy(DARK).lerp(c === tallest ? PEAK : LIT, fill)
+        panes.setColorAt(c * rows + r, color)
+      }
+    }
+    panes.instanceColor!.needsUpdate = true
+  }
+  place(0)
+  panes.userData.tick = place
+  return panes
+}
+
+/** A string of small lights between two points, sagging in the middle and twinkling. */
+export function createStringLights(from: THREE.Vector3, to: THREE.Vector3, count = 9): THREE.Group {
+  const g = new THREE.Group()
+  const bulbs = Array.from({ length: count }, (_, i) => {
+    const u = i / (count - 1)
+    const material = glow('#ffe3a3', 1)
+    const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.045, 8, 6), material)
+    bulb.position.lerpVectors(from, to, u).setY(from.y + (to.y - from.y) * u - Math.sin(u * Math.PI) * 0.22)
+    g.add(bulb)
+    return material
+  })
+  g.userData.tick = (t: number) => bulbs.forEach((b, i) => (b.emissiveIntensity = 1.1 + Math.sin(t * 2.2 + i * 1.7) * 0.5))
+  return g
+}
+
+// ── WeWork: Shanghai across the water ───────────────────────────────────────
+
+/**
+ * Lujiazui in miniature: the Oriental Pearl Tower on the waterfront, with the
+ * Shanghai Tower, the World Financial Center (the "bottle opener") and Jin Mao
+ * behind it, and a handful of lower blocks. The waterfront faces +z.
+ */
+export function createPudong(): THREE.Group {
+  const g = new THREE.Group()
+  g.name = 'pudong'
+  const GROUND = 0.48
+  const shore = new THREE.Mesh(new THREE.SphereGeometry(1, 28, 14), mat('#ead9a6', 1))
+  shore.scale.set(3.9, 0.75, 3.2)
+  shore.position.y = -0.22
+  const streets = new THREE.Mesh(new THREE.SphereGeometry(1, 28, 14), mat('#c9cdd0', 1))
+  streets.scale.set(3.5, 0.7, 2.8)
+  streets.position.y = -0.14
+  g.add(shore, streets)
+  // Riverside park along the waterfront
+  box(g, 3.6, 0.05, 0.7, mat('#7fb56a', 1), 0, GROUND + 0.01, 1.75)
+
+  // Oriental Pearl Tower: spheres strung on columns, on three slanting legs
+  const pearl = new THREE.Group()
+  pearl.position.set(-1.2, GROUND, 1.2)
+  g.add(pearl)
+  const concrete = mat('#d9dde0')
+  const pink = mat('#c6557f', 0.3, 0.3)
+  for (let i = 0; i < 3; i++) {
+    const a = (i / 3) * Math.PI * 2
+    cyl(pearl, 0.05, 0.05, 1.5, concrete, Math.cos(a) * 0.14, 0, Math.sin(a) * 0.14, 8)
+    const leg = cyl(pearl, 0.045, 0.06, 1.25, concrete, Math.cos(a) * 0.42, 0, Math.sin(a) * 0.42, 8)
+    leg.rotation.set(Math.sin(a) * -0.5, 0, Math.cos(a) * 0.5)
+    leg.position.set(Math.cos(a) * 0.42, 0.52, Math.sin(a) * 0.42)
+  }
+  const ball = (r: number, y: number) => {
+    const s = new THREE.Mesh(new THREE.SphereGeometry(r, 20, 14), pink)
+    s.position.y = y
+    s.castShadow = true
+    pearl.add(s)
+  }
+  ball(0.36, 1.35)
+  cyl(pearl, 0.09, 0.11, 1.25, concrete, 0, 1.6, 0, 12)
+  ball(0.27, 2.95)
+  cyl(pearl, 0.05, 0.07, 0.4, concrete, 0, 3.15, 0, 10)
+  ball(0.11, 3.6)
+  cyl(pearl, 0.012, 0.03, 0.9, mat('#c9ced6', 0.3, 0.7), 0, 3.68, 0, 8)
+
+  // Shanghai Tower: a tapering glass spiral, the tallest of the three
+  const spiral = mat('#a9d2de', 0.2, 0.5)
+  for (let i = 0; i < 9; i++) {
+    const seg = cyl(g, 0.4 - (i + 1) * 0.026, 0.4 - i * 0.026, 0.56, spiral, 1.05, GROUND + i * 0.56, -0.5, 5)
+    seg.rotation.y = i * 0.3
+  }
+  // World Financial Center: a slim blade with the opening at the top
+  const blade = mat('#587f9c', 0.25, 0.5)
+  box(g, 0.56, 3.3, 0.5, blade, 2.05, GROUND, 0.35)
+  for (const x of [-0.21, 0.21]) box(g, 0.14, 0.62, 0.5, blade, 2.05 + x, GROUND + 3.3, 0.35)
+  box(g, 0.56, 0.13, 0.5, blade, 2.05, GROUND + 3.92, 0.35)
+  // Jin Mao: a tiered tower with a spire
+  const tiers = mat('#b3bcc3', 0.35, 0.5)
+  let y = GROUND
+  for (const [size, tall] of [[0.62, 1.1], [0.52, 0.8], [0.42, 0.6], [0.32, 0.45], [0.2, 0.3]]) {
+    box(g, size, tall, size, tiers, 0.2, y, 0.75)
+    y += tall
+  }
+  cyl(g, 0.01, 0.04, 0.6, tiers, 0.2, y, 0.75, 8)
+
+  // Lower blocks behind and around
+  const rand = rng(88)
+  const spots: [number, number][] = [
+    [-2.3, 0.2], [-1.9, -0.9], [-1, -1.5], [-0.2, -0.6], [-0.4, -1.8], [0.4, -1.6], [1.7, -1.4],
+    [2.4, -0.6], [-0.5, 0.3], [2.7, 0.9], [-2.6, -0.5], [1.2, 1.3],
+  ]
+  const palette = ['#c3bbad', '#9aa6b0', '#6f97ad', '#d8d2c4', '#a9b7c0', '#8d9aa5']
+  const blocks = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({ roughness: 0.8 }), spots.length)
+  const m = new THREE.Object3D()
+  const color = new THREE.Color()
+  spots.forEach(([x, z], i) => {
+    const h = 0.7 + rand() * 1.3
+    m.position.set(x, GROUND - 0.15 + h / 2, z)
+    m.scale.set(0.48 + rand() * 0.16, h + 0.3, 0.46 + rand() * 0.14)
+    m.updateMatrix()
+    blocks.setMatrixAt(i, m.matrix)
+    blocks.setColorAt(i, color.set(palette[Math.floor(rand() * palette.length)]))
+  })
+  g.add(blocks)
+  return g
+}
+
+/** A small ferry shuttling between two points on the water, pausing at each end. */
+export function createFerry(a: THREE.Vector3, b: THREE.Vector3): THREE.Group {
+  const boat = new THREE.Group()
+  boat.name = 'ferry'
+  box(boat, 0.62, 0.22, 1.5, mat('#f3efe2'), 0, -0.04, 0)
+  box(boat, 0.64, 0.07, 1.52, mat('#2f7d5b'), 0, 0.06, 0)
+  box(boat, 0.5, 0.26, 0.9, mat('#f3efe2'), 0, 0.18, -0.05)
+  box(boat, 0.52, 0.1, 0.92, mat('#35444f', 0.3, 0.3), 0, 0.26, -0.05)
+  box(boat, 0.56, 0.04, 0.98, mat('#2f7d5b'), 0, 0.44, -0.05)
+  cyl(boat, 0.06, 0.07, 0.24, mat('#d9843a'), 0, 0.48, -0.25, 10)
+  boat.rotation.y = Math.atan2(b.x - a.x, b.z - a.z)
+  const TRAVEL = 7
+  const WAIT = 2.5
+  const place = (t: number) => {
+    const s = (t + 4) % ((TRAVEL + WAIT) * 2)
+    const out = ease(clamp01(s / TRAVEL))
+    const back = ease(clamp01((s - TRAVEL - WAIT) / TRAVEL))
+    // Sits low enough that the hull is in the water, not on top of it
+    boat.position.lerpVectors(a, b, out - back).setY(-0.06 + Math.sin(t * 1.4) * 0.025)
+  }
+  place(0)
+  boat.userData.tick = place
+  // No shadow: cast onto the water it reads as the boat hovering above it.
+  boat.traverse((o) => (o.castShadow = false))
+  return boat
+}
+
 // ── Cornell Tech: the Roosevelt Island tram ─────────────────────────────────
 
 /**

@@ -51,7 +51,15 @@ button { font: inherit; color: inherit; cursor: pointer; }
   transition: background 0.15s, color 0.15s, opacity 0.2s;
 }
 .label.hover, .label.selected, .label:hover, .label:focus-visible { background: var(--ink); color: #fff; outline: none; }
-#labels.has-selection .label:not(.selected) { opacity: 0.35; }
+/* A building's name tag appears only while the pointer is over the building (or it
+   is selected, or reached by keyboard). The balloon's tag is always shown. */
+.label:not(.balloon-label) { opacity: 0; pointer-events: none; }
+.label.hover, .label.selected, .label:focus-visible { opacity: 1; }
+/* Touch screens have no hover, so there the tags stay visible and tappable. */
+@media (hover: none) {
+  .label:not(.balloon-label) { opacity: 1; pointer-events: auto; }
+  #labels.has-selection .label:not(.selected) { opacity: 0.35; }
+}
 .label.balloon-label { padding: 5px 12px; background: #ef6f5a; color: #fff; font-size: 13px; }
 .label.balloon-label.hover, .label.balloon-label:hover, .label.balloon-label:focus-visible { background: var(--ink); }
 

@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import { box, cyl, dome, gable, glow, logoPlate, mat, sign, windowedBox } from './kit'
 import { createSmoke } from './life'
-import { createBanner, createFeedScreen, createNoteLogo } from './signature'
+import { createBanner, createChartFacade, createFeedScreen, createNoteLogo, createStringLights } from './signature'
 
 // One builder per place. Each draws into a group whose origin is the middle of
 // the plot at ground level, with the front door facing +z, and returns the
@@ -80,20 +80,61 @@ const factory: Builder = (g) => {
   return 3
 }
 
+// A black steel frame with a glass lounge at street level. The floors above
+// are the dashboard: on the front and back, the windows are a live bar chart.
 const wework: Builder = (g) => {
-  plinth(g, 2.8, 2)
-  windowedBox(g, 2.8, 2.2, 2, '#22252b', '#a8dbe6', 0, 0.1, 0, 0.7)
-  box(g, 2.9, 0.1, 2.1, mat('#c58b55'), 0, 2.3, 0) // timber roof deck
-  // Roof terrace
-  cyl(g, 0.03, 0.03, 0.7, dark, -0.7, 2.4, 0.2, 8)
-  cyl(g, 0.02, 0.5, 0.18, mat('#f2c14e'), -0.7, 3.05, 0.2, 16)
-  for (const [x, z] of [[0.5, 0.4], [0.9, -0.3]]) {
-    box(g, 0.3, 0.2, 0.3, mat('#c58b55'), x, 2.4, z)
-    box(g, 0.24, 0.22, 0.24, mat('#5f9e5a'), x, 2.6, z)
+  const steel = mat('#15171b', 0.6, 0.2)
+  plinth(g, 3, 2.2)
+  // Lounge: tall warm-lit glass between black posts
+  box(g, 2.9, 0.78, 2.1, mat('#f3dcae', 0.5), 0, 0.1, 0)
+  for (let i = 0; i <= 6; i++) {
+    const x = -1.45 + (2.9 * i) / 6
+    for (const z of [-1.06, 1.06]) box(g, 0.07, 0.78, 0.05, steel, x, 0.1, z)
   }
-  door(g, 1.01, '#c58b55', 0.6, 0.7)
-  sign(g, 'wework', 1.3, 0.28, '#111111', '#ffffff', 0, 1, 1.02)
-  return 3.4
+  for (const x of [-1.47, 1.47]) for (const z of [-0.53, 0, 0.53]) box(g, 0.05, 0.78, 0.07, steel, x, 0.1, z)
+  box(g, 3, 0.12, 2.2, steel, 0, 0.88, 0)
+  door(g, 1.08, '#2b2118', 0.5, 0.66)
+  sign(g, 'wework', 1.25, 0.26, '#111111', '#ffffff', 0, 0.9, 1.12)
+
+  // Upper floors
+  windowedBox(g, 2.9, 2.2, 2.1, '#15171b', '#55646f', 0, 1, 0, 0.6)
+  for (const side of [1, -1]) {
+    box(g, 2.9, 2.2, 0.05, steel, 0, 1, side * 1.06)
+    const chart = createChartFacade(2.66, 2, 7, 6)
+    chart.position.set(0, 1.1, side * 1.09)
+    chart.rotation.y = side === 1 ? 0 : Math.PI
+    g.add(chart)
+  }
+
+  // Roof terrace: timber deck, umbrella, planters, a string of lights
+  box(g, 3, 0.1, 2.2, mat('#c58b55'), 0, 3.2, 0)
+  cyl(g, 0.03, 0.03, 0.7, steel, -0.75, 3.3, 0.25, 8)
+  cyl(g, 0.02, 0.5, 0.18, mat('#f2c14e'), -0.75, 3.95, 0.25, 16)
+  for (const [x, z] of [[0.55, 0.45], [0.95, -0.35]]) {
+    box(g, 0.3, 0.2, 0.3, mat('#c58b55'), x, 3.3, z)
+    box(g, 0.24, 0.22, 0.24, mat('#5f9e5a'), x, 3.5, z)
+  }
+  for (const x of [-1.38, 1.38]) cyl(g, 0.025, 0.025, 0.75, steel, x, 3.3, -0.92, 6)
+  g.add(createStringLights(new THREE.Vector3(-1.38, 4.02, -0.92), new THREE.Vector3(1.38, 4.02, -0.92)))
+
+  // Shanghai: a shared bike parked by the door
+  const bike = new THREE.Group()
+  bike.position.set(1.05, 0.1, 1.5)
+  bike.rotation.y = 0.5
+  g.add(bike)
+  const teal = mat('#1fa3a8', 0.5)
+  for (const z of [-0.2, 0.2]) {
+    const wheel = new THREE.Mesh(new THREE.TorusGeometry(0.12, 0.022, 8, 18), dark)
+    wheel.position.set(0, 0.14, z)
+    wheel.rotation.y = Math.PI / 2
+    bike.add(wheel)
+  }
+  box(bike, 0.03, 0.03, 0.4, teal, 0, 0.2, 0)
+  box(bike, 0.03, 0.2, 0.03, teal, 0, 0.2, -0.08)
+  box(bike, 0.07, 0.03, 0.12, dark, 0, 0.4, -0.08)
+  box(bike, 0.03, 0.24, 0.03, teal, 0, 0.14, 0.2)
+  box(bike, 0.22, 0.03, 0.03, dark, 0, 0.38, 0.2)
+  return 4.3
 }
 
 const pico: Builder = (g) => {
