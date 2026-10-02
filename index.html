@@ -9,6 +9,8 @@
   <body>
     <canvas id="scene" aria-label="Interactive 3D island. Use the list view for a text version."></canvas>
     <div id="labels"></div>
+    <div id="haze-top"></div>
+    <div id="haze"></div>
 
     <header class="intro">
       <h1>Marco <br />Zhuang<span class="dot">.</span></h1>
@@ -20,11 +22,7 @@
       </p>
     </header>
 
-    <nav class="levels" aria-label="Level">
-      <button type="button" data-level="ground">Island</button>
-      <button type="button" data-level="sky">Clouds</button>
-    </nav>
-    <p class="hint">Drag to look around · click a building · climb the ladder</p>
+    <p class="hint"></p>
 
     <aside id="panel" aria-live="polite" hidden>
       <button class="close" type="button" aria-label="Close">×</button>

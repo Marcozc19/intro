@@ -7,7 +7,7 @@ const $ = <T extends HTMLElement>(selector: string) => document.querySelector<T>
 const panel = $('#panel')
 const panelBody = $('.panel-body')
 const list = $('#list')
-const levelButtons = [...document.querySelectorAll<HTMLButtonElement>('.levels button')]
+const hint = $('.hint')
 
 // ── Intro block ─────────────────────────────────────────────────────────────
 $('.tagline').textContent = profile.tagline
@@ -51,16 +51,19 @@ function projectNodes(project: Project) {
 }
 
 // ── State ───────────────────────────────────────────────────────────────────
-const world = createWorld($<HTMLCanvasElement>('#scene'), $('#labels'), {
+const world = createWorld($<HTMLCanvasElement>('#scene'), $('#labels'), $('#haze'), {
   onPick: (id) => select(id),
-  onPickLadder: () => setLevel(world.level === 'ground' ? 'sky' : 'ground'),
+  onPickBalloon: () => setLevel(world.level === 'ground' ? 'sky' : 'ground'),
   onPickNothing: () => {
     if (!panel.hidden) select(null)
   },
 })
 
-function syncLevelButtons() {
-  for (const b of levelButtons) b.setAttribute('aria-pressed', String(b.dataset.level === world.level))
+/** The hint under the scene says how to move between the island and the clouds. */
+function syncHint() {
+  hint.textContent = world.level === 'sky'
+    ? 'Click an idea · click the balloon to go back down'
+    : 'Drag to look around · click a building · ride the balloon to the clouds'
 }
 
 function select(id: string | null) {
@@ -78,7 +81,7 @@ function select(id: string | null) {
     world.focus(id)
     history.replaceState(null, '', `#/${id}`)
   }
-  syncLevelButtons()
+  syncHint()
 }
 
 function setLevel(level: Level) {
@@ -86,10 +89,9 @@ function setLevel(level: Level) {
   panel.hidden = true
   world.focus(null, level)
   history.replaceState(null, '', location.pathname + location.search)
-  syncLevelButtons()
+  syncHint()
 }
 
-for (const b of levelButtons) b.addEventListener('click', () => setLevel(b.dataset.level as Level))
 $('#panel .close').addEventListener('click', () => select(null))
 
 // ── List view ───────────────────────────────────────────────────────────────
@@ -121,10 +123,11 @@ window.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return
   if (!list.hidden) list.hidden = true
   else if (!panel.hidden) select(null)
+  else if (world.level === 'sky') setLevel('ground')
 })
 
 // ── Deep links: /#/tiktok opens that building ───────────────────────────────
-syncLevelButtons()
+syncHint()
 const fromHash = () => location.hash.replace(/^#\/?/, '')
 if (fromHash()) select(fromHash())
 window.addEventListener('hashchange', () => select(fromHash() || null))

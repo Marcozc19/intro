@@ -2,11 +2,11 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { places, projects } from '../data'
 import { createBuilding } from './buildings'
-import { BRIDGE, createPaths, plots } from './layout'
+import { BALLOON, BRIDGE, createPaths, plots } from './layout'
 import { createBirds, createDriftingClouds, createSailboat } from './life'
-import { createBridge, createCloudBank, createDock, createLadder, createProjectCloud, createTrees, SKY_Y } from './props'
+import { createBalloon, createBridge, createCloudBank, createDock, createProjectCloud, createTrees, SKY_Y } from './props'
 import { createTram } from './signature'
-import { createRiverFlow, createSeabed, createTerrain, createWater, ISLAND_R, riverX } from './terrain'
+import { createRiverFlow, createSeabed, createTerrain, createWater, groundHeight, ISLAND_R, riverX } from './terrain'
 
 export type Level = 'ground' | 'sky'
 
@@ -26,15 +26,19 @@ type Item = {
 
 type Events = {
   onPick(id: string): void
-  onPickLadder(): void
+  onPickBalloon(): void
   onPickNothing(): void
 }
 
 const BG = '#e9f3f2'
 const BUILDING_SCALE = 1.3
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+const smooth = (a: number, b: number, x: number) => {
+  const t = Math.min(1, Math.max(0, (x - a) / (b - a)))
+  return t * t * (3 - 2 * t)
+}
 
-export function createWorld(canvas: HTMLCanvasElement, labelsEl: HTMLElement, events: Events) {
+export function createWorld(canvas: HTMLCanvasElement, labelsEl: HTMLElement, hazeEl: HTMLElement, events: Events) {
   // ── Renderer, scene, lights ───────────────────────────────────────────────
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
@@ -45,7 +49,8 @@ export function createWorld(canvas: HTMLCanvasElement, labelsEl: HTMLElement, ev
 
   const scene = new THREE.Scene()
   scene.background = new THREE.Color(BG)
-  scene.fog = new THREE.Fog(BG, 85, 165)
+  const fog = new THREE.Fog(BG, 85, 165)
+  scene.fog = fog
 
   scene.add(new THREE.HemisphereLight('#ffffff', '#b7d6c4', 1.5))
   const sun = new THREE.DirectionalLight('#fff3dd', 2.6)
@@ -113,6 +118,7 @@ export function createWorld(canvas: HTMLCanvasElement, labelsEl: HTMLElement, ev
     scene.add(createTram(station, new THREE.Vector3(station.x, 0, station.z).normalize()))
     keepClear.push(new THREE.Vector2(station.x, station.z))
   }
+  keepClear.push(new THREE.Vector2(BALLOON.x, BALLOON.z))
   const riverBanks: THREE.Vector2[] = []
   for (let z = -ISLAND_R; z <= ISLAND_R; z += 0.8) riverBanks.push(new THREE.Vector2(riverX(z), z))
 
@@ -120,24 +126,38 @@ export function createWorld(canvas: HTMLCanvasElement, labelsEl: HTMLElement, ev
     { points: paths.points.filter((_, i) => i % 2 === 0), radius: 1.2 },
     { points: sites.map((s) => new THREE.Vector2(s.position.x, s.position.z)), radius: 3.4 },
     { points: riverBanks, radius: 2.5 },
-    { points: keepClear, radius: 1.8 },
+    { points: keepClear, radius: 2.4 },
   ]))
 
-  const ladder = createLadder()
-  ladder.userData.pick = 'ladder'
-  ladder.scale.set(1.5, 1, 1.5)
-  pickables.push(ladder)
-  scene.add(ladder, createCloudBank(), createSailboat(), createBirds(), createDriftingClouds())
+  // The hot air balloon is the only way up. It waits at the far end of
+  // downtown and carries the view above the clouds when clicked.
+  const balloon = createBalloon()
+  balloon.userData.pick = 'balloon'
+  pickables.push(balloon)
+  const pad = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.6, 0.14, 28), new THREE.MeshStandardMaterial({ color: '#d6cfbf' }))
+  pad.position.set(BALLOON.x, groundHeight(BALLOON.x, BALLOON.z) + 0.02, BALLOON.z)
+  pad.receiveShadow = true
+  balloon.position.set(BALLOON.x, 0, BALLOON.z)
+  const BALLOON_LOW = groundHeight(BALLOON.x, BALLOON.z) + 0.1
+  const BALLOON_HIGH = SKY_Y + 0.5
+  const CLIMB = 4.6 // seconds for the ride, and for the camera that follows it
+  let altitude = 0 // 0 on the island, 1 above the clouds
+  let balloonHover = 0
+  const balloonLabel = document.createElement('button')
+  balloonLabel.className = 'label balloon-label'
+  balloonLabel.addEventListener('click', () => events.onPickBalloon())
+  labelsEl.append(balloonLabel)
+  scene.add(balloon, pad, createCloudBank(BALLOON.x, BALLOON.z), createSailboat(), createBirds(), createDriftingClouds())
 
+  // Ideas sit on the cloud deck in an arc in front of where the balloon comes up.
   projects.forEach((project, i) => {
-    const angle = Math.PI / 2 + (i - (projects.length - 1) / 2) * 0.95
-    const p = new THREE.Vector3(Math.cos(angle) * 7.2, SKY_Y, Math.sin(angle) * 7.2)
+    const angle = THREE.MathUtils.degToRad(145 - ((i + 0.5) / projects.length) * 110)
+    const p = new THREE.Vector3(0.5 + Math.cos(angle) * 9, SKY_Y, -4 + Math.sin(angle) * 9)
     const cloud = createProjectCloud(project.color, 100 + i)
     cloud.position.copy(p)
     scene.add(cloud)
-    const out = new THREE.Vector3(p.x, 0, p.z).normalize()
     const target = p.clone().setY(SKY_Y + 0.6)
-    const pos = target.clone().addScaledVector(out, 8.5).setY(SKY_Y + 4)
+    const pos = target.clone().add(new THREE.Vector3(0, 3.4, 8.5))
     addItem(project.id, 'sky', project.name, cloud, p.clone().setY(SKY_Y + 2.3), { pos, target })
   })
 
@@ -157,8 +177,6 @@ export function createWorld(canvas: HTMLCanvasElement, labelsEl: HTMLElement, ev
   controls.enablePan = false
   controls.minDistance = 8
   controls.maxDistance = 95
-  controls.minPolarAngle = 0.75
-  controls.maxPolarAngle = 1.45
   controls.autoRotateSpeed = 0.35
   controls.autoRotate = !reducedMotion
   const stopAutoRotate = () => (controls.autoRotate = false)
@@ -169,8 +187,8 @@ export function createWorld(canvas: HTMLCanvasElement, labelsEl: HTMLElement, ev
   let aspect = 1
 
   function overview(l: Level): Pose {
-    const target = l === 'ground' ? new THREE.Vector3(0, 2.5, 0) : new THREE.Vector3(0, SKY_Y, 1.5)
-    const offset = l === 'ground' ? new THREE.Vector3(0, 26, 50) : new THREE.Vector3(0, 11, 21)
+    const target = l === 'ground' ? new THREE.Vector3(0, 2.5, 0) : new THREE.Vector3(0.5, SKY_Y, -1)
+    const offset = l === 'ground' ? new THREE.Vector3(0, 26, 50) : new THREE.Vector3(0, 13, 27)
     // Pull back on narrow screens so the whole island still fits.
     offset.multiplyScalar(Math.max(1, 1.35 / aspect))
     return { pos: target.clone().add(offset), target }
@@ -226,9 +244,9 @@ export function createWorld(canvas: HTMLCanvasElement, labelsEl: HTMLElement, ev
       to = { target: to.target, pos: to.target.clone().lerp(to.pos, 1.7) }
     }
     const mid: Pose | undefined = climbing
-      ? { pos: new THREE.Vector3(0, SKY_Y * 0.62, 21), target: new THREE.Vector3(0, SKY_Y * 0.55, 0) }
+      ? { pos: new THREE.Vector3(BALLOON.x * 0.5, SKY_Y * 0.5, BALLOON.z + 26), target: new THREE.Vector3(BALLOON.x, SKY_Y * 0.5, BALLOON.z) }
       : undefined
-    fly(to, climbing ? 2.6 : 1.3, mid)
+    fly(to, climbing ? CLIMB : 1.3, mid)
     level = nextLevel
     selected = item ? item.id : null
     shiftGoal = item ? -0.14 : 0.13
@@ -252,7 +270,7 @@ export function createWorld(canvas: HTMLCanvasElement, labelsEl: HTMLElement, ev
     while (o && !o.userData.pick) o = o.parent
     const id: string | null = o ? o.userData.pick : null
     if (!id) return null
-    if (id === 'ladder') return id
+    if (id === 'balloon') return id
     return items.find((it) => it.id === id)?.level === level ? id : null
   }
 
@@ -267,7 +285,7 @@ export function createWorld(canvas: HTMLCanvasElement, labelsEl: HTMLElement, ev
     downAt = null
     if (moved > 6) return
     const id = pickAt(e.clientX, e.clientY)
-    if (id === 'ladder') events.onPickLadder()
+    if (id === 'balloon') events.onPickBalloon()
     else if (id) events.onPick(id)
     else events.onPickNothing()
   })
@@ -321,6 +339,51 @@ export function createWorld(canvas: HTMLCanvasElement, labelsEl: HTMLElement, ev
       }
       for (const run of tickers) run(elapsed, dt)
     }
+
+    // Balloon: rise or sink towards the current level, in step with the camera
+    const goal = level === 'sky' ? 1 : 0
+    const stepAlt = reducedMotion ? 1 : dt / CLIMB
+    altitude = goal > altitude ? Math.min(goal, altitude + stepAlt) : Math.max(goal, altitude - stepAlt)
+    const lifted = ease(altitude)
+    const afloat = reducedMotion ? 0 : Math.sin(elapsed * 0.9) * 0.15 * lifted
+    balloon.position.y = BALLOON_LOW + (BALLOON_HIGH - BALLOON_LOW) * lifted + afloat
+    balloon.rotation.y = lifted * 1.2 + (reducedMotion ? 0 : Math.sin(elapsed * 0.3) * 0.08)
+    balloonHover += ((hovered === 'balloon' ? 1 : 0) - balloonHover) * Math.min(1, dt * 10)
+    balloon.scale.setScalar(1.2 * (1 + balloonHover * 0.05))
+    const riding = altitude > 0.02 && altitude < 0.98
+    balloonLabel.textContent = level === 'sky' ? 'Back to the island ↓' : 'Ride up to my ideas ↑'
+    balloonLabel.classList.toggle('hover', hovered === 'balloon')
+    projected.set(BALLOON.x, balloon.position.y + 8.2, BALLOON.z).project(camera)
+    balloonLabel.style.display = riding || projected.z >= 1 || selected ? 'none' : ''
+    balloonLabel.style.transform =
+      `translate(-50%, -100%) translate(${((projected.x * 0.5 + 0.5) * size.x).toFixed(1)}px, ${((-projected.y * 0.5 + 0.5) * size.y).toFixed(1)}px)`
+
+    // Camera limits. On the island the camera may tilt towards a top-down
+    // view, but never climbs above the cloud deck: the steeper it looks (or the
+    // higher it gets), the more cloud drifts across the view.
+    let haze = 0
+    if (level === 'ground') {
+      const dist = camera.position.distanceTo(controls.target)
+      const ceiling = Math.acos(Math.min(1, (SKY_Y - 12 - controls.target.y) / dist))
+      controls.minPolarAngle = Math.max(0.3, ceiling)
+      controls.maxPolarAngle = 1.45
+      if (altitude === 0 && !tween) {
+        const steep = smooth(0.72, 0.36, controls.getPolarAngle())
+        const high = smooth(SKY_Y - 26, SKY_Y - 12, camera.position.y)
+        haze = Math.max(steep, high) * 0.92
+      }
+    } else {
+      controls.minPolarAngle = 0.6
+      controls.maxPolarAngle = 1.3
+    }
+    hazeEl.style.opacity = haze.toFixed(3)
+    hazeEl.style.backdropFilter = haze > 0.01 ? `blur(${(haze * 10).toFixed(1)}px)` : 'none'
+    // The ride passes through cloud: fog closes in on everything except the
+    // balloon (its materials ignore fog), then thins out again at the other end.
+    const inCloud = smooth(0.08, 0.5, altitude) * (1 - smooth(0.55, 0.95, altitude))
+    fog.near = 85 + (4 - 85) * inCloud
+    fog.far = 165 + (34 - 165) * inCloud
+    document.body.classList.toggle('under-clouds', level === 'ground' && !riding)
 
     for (const it of items) {
       const on = it.id === hovered || it.id === selected ? 1 : 0

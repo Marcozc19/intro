@@ -2,7 +2,9 @@ import * as THREE from 'three'
 import { box, cyl, glow, mat, rng } from './kit'
 import { groundHeight, ISLAND_R } from './terrain'
 
-export const SKY_Y = 20
+// The cloud deck sits far above any view of the island, so its top (and the
+// ideas on it) can never be seen from below.
+export const SKY_Y = 100
 
 // ── Trees ───────────────────────────────────────────────────────────────────
 
@@ -114,38 +116,64 @@ export function createBridge(west: number, east: number, z: number): THREE.Group
   return g
 }
 
-// ── Ladder ──────────────────────────────────────────────────────────────────
+// ── Hot air balloon ─────────────────────────────────────────────────────────
 
-export function createLadder(): THREE.Group {
+/** The way up to the clouds. Origin is the bottom of the basket. */
+export function createBalloon(): THREE.Group {
   const g = new THREE.Group()
-  g.name = 'ladder'
-  const base = groundHeight(0, 0)
-  const height = SKY_Y + 0.9 - base
-  const wood = mat('#c8965f')
-  g.position.y = base
-  for (const x of [-0.36, 0.36]) cyl(g, 0.055, 0.055, height, wood, x, 0, 0, 8)
-  const rungCount = Math.floor(height / 0.45)
-  const rungGeo = new THREE.CylinderGeometry(0.04, 0.04, 0.72, 6)
-  rungGeo.rotateZ(Math.PI / 2)
-  const rungs = new THREE.InstancedMesh(rungGeo, wood, rungCount)
-  const m = new THREE.Object3D()
-  for (let i = 0; i < rungCount; i++) {
-    m.position.set(0, 0.35 + i * 0.45, 0)
-    m.updateMatrix()
-    rungs.setMatrixAt(i, m.matrix)
+  g.name = 'balloon'
+
+  // Striped fabric: alternating gores running top to bottom
+  const c = document.createElement('canvas')
+  c.width = 256
+  c.height = 8
+  const ctx = c.getContext('2d')!
+  const gores = ['#ef6f5a', '#fff3dc', '#f4b942', '#fff3dc']
+  for (let i = 0; i < 8; i++) {
+    ctx.fillStyle = gores[i % gores.length]
+    ctx.fillRect(i * 32, 0, 32, 8)
   }
-  rungs.castShadow = true
-  g.add(rungs)
-  // Stone footing
-  cyl(g, 0.9, 1, 0.16, mat('#d6cfbf'), 0, -0.04, 0, 24)
-  // Generous invisible click target around the lower section
+  const stripes = new THREE.CanvasTexture(c)
+  stripes.colorSpace = THREE.SRGBColorSpace
+  const fabric = new THREE.MeshStandardMaterial({ map: stripes, roughness: 0.75 })
+
+  const envelope = new THREE.Mesh(new THREE.SphereGeometry(1.75, 32, 20), fabric)
+  envelope.position.y = 4.15
+  envelope.scale.y = 1.12
+  envelope.castShadow = true
+  const throat = new THREE.Mesh(new THREE.CylinderGeometry(1.28, 0.42, 1.5, 32, 1, true), fabric)
+  throat.position.y = 2.2
+  throat.castShadow = true
+  g.add(envelope, throat)
+  cyl(g, 0.44, 0.44, 0.08, mat('#8a4b3a'), 0, 1.42, 0, 24)
+
+  // Basket, ropes and burner
+  const wicker = mat('#a9774c')
+  box(g, 0.8, 0.5, 0.8, wicker, 0, 0, 0)
+  box(g, 0.9, 0.08, 0.9, mat('#7d5636'), 0, 0.5, 0)
+  for (const [x, z] of [[-0.36, -0.36], [0.36, -0.36], [-0.36, 0.36], [0.36, 0.36]]) {
+    cyl(g, 0.015, 0.015, 0.95, mat('#5b4634'), x, 0.5, z, 6)
+  }
+  cyl(g, 0.1, 0.12, 0.14, mat('#5b6068', 0.4, 0.6), 0, 0.95, 0, 12)
+  const flame = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.42, 10), glow('#ffb347', 1.6))
+  flame.position.y = 1.3
+  flame.userData.tick = (t: number) => flame.scale.set(1, 0.8 + Math.sin(t * 17) * 0.15 + Math.sin(t * 29) * 0.1, 1)
+  g.add(flame)
+
+  // Generous invisible click target
   const hit = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.9, 0.9, 12, 12),
+    new THREE.CylinderGeometry(2, 1, 6.4, 12),
     new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false }),
   )
-  hit.position.y = 6
-  hit.name = 'ladder-hit'
+  hit.position.y = 3.2
   g.add(hit)
+  // The balloon ignores scene fog, so it stays clear while the ride fogs
+  // everything else out. Materials are cloned because some are shared.
+  g.traverse((o) => {
+    if (!(o instanceof THREE.Mesh)) return
+    o.material = (o.material as THREE.Material).clone()
+    o.material.fog = false
+  })
   return g
 }
 
@@ -156,23 +184,28 @@ export const puffMat = new THREE.MeshStandardMaterial({
   color: '#ffffff', roughness: 1, emissive: '#ffffff', emissiveIntensity: 0.22,
 })
 
-/** The cloud bank the ladder disappears into, with a gap around the ladder. */
-export function createCloudBank(): THREE.InstancedMesh {
+/** The cloud deck: a wide floor of cloud with a gap where the balloon comes up. */
+export function createCloudBank(gapX: number, gapZ: number): THREE.InstancedMesh {
   const rand = rng(11)
-  const count = 120
-  const mesh = new THREE.InstancedMesh(puffGeo, puffMat, count)
-  const m = new THREE.Object3D()
-  for (let i = 0; i < count; i++) {
+  const RADIUS = 27
+  const spots: [number, number][] = []
+  while (spots.length < 340) {
     const a = rand() * Math.PI * 2
-    const r = 2.6 + Math.sqrt(rand()) * 8.6
-    const s = 1.1 + rand() * 1.3
-    m.position.set(Math.cos(a) * r, SKY_Y - 3.1 + rand() * 1.1, Math.sin(a) * r)
+    const r = Math.sqrt(rand()) * RADIUS
+    const x = Math.cos(a) * r
+    const z = Math.sin(a) * r
+    if (Math.hypot(x - gapX, z - gapZ) > 3.4) spots.push([x, z])
+  }
+  const mesh = new THREE.InstancedMesh(puffGeo, puffMat, spots.length)
+  const m = new THREE.Object3D()
+  spots.forEach(([x, z], i) => {
+    const s = 1.5 + rand() * 1.5
+    m.position.set(x, SKY_Y - 3.1 + rand() * 1.1, z)
     m.scale.set(s, s * 0.6, s)
     m.updateMatrix()
     mesh.setMatrixAt(i, m.matrix)
-  }
+  })
   mesh.name = 'cloud-bank'
-  mesh.userData.tick = (t: number) => (mesh.rotation.y = t * 0.012)
   return mesh
 }
 
