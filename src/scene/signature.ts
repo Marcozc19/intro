@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
 import { box, cyl, glow, mat, rng } from './kit'
+import { puffGeo } from './props'
 import { groundHeight } from './terrain'
 
 // Signature props: one animated set piece per experience that shows what the
@@ -453,6 +454,179 @@ export function createHologramWorld(): THREE.Group {
     ;(ground.material as THREE.MeshBasicMaterial).opacity = 0.5 * flicker * dissolve
     ;(ring.material as THREE.MeshBasicMaterial).opacity = 0.9 * flicker * dissolve
     ;(beam.material as THREE.MeshBasicMaterial).opacity = 0.16 * flicker * (0.4 + 0.6 * dissolve)
+  }
+  place(0)
+  g.userData.tick = place
+  return g
+}
+
+// ── echo3D: a model goes up to the cloud and comes back lighter ─────────────
+
+/**
+ * A heavy, finely meshed 3D model rises into a small cloud; the cloud works on
+ * it; a clean, simple version of the same shape comes back down. Each round
+ * uses a different shape. Origin is the roof the models leave from.
+ */
+export function createCloudPipeline(navy: string, sky: string): THREE.Group {
+  const g = new THREE.Group()
+  const CLOUD_Y = 1.75
+  const cloud = new THREE.Group()
+  cloud.position.y = CLOUD_Y
+  const cloudMat = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 1, emissive: sky, emissiveIntensity: 0.12 })
+  for (const [x, y, z, r] of [[0, 0, 0, 0.42], [-0.42, -0.06, 0.05, 0.3], [0.44, -0.05, -0.04, 0.32], [0.14, 0.16, 0.1, 0.3], [-0.2, 0.1, -0.14, 0.27]]) {
+    const puff = new THREE.Mesh(puffGeo, cloudMat)
+    puff.position.set(x, y, z)
+    puff.scale.set(r, r * 0.75, r)
+    cloud.add(puff)
+  }
+  g.add(cloud)
+
+  // Each pair is the same object before and after: dense mesh, then tidy mesh.
+  const pairs: [THREE.BufferGeometry, THREE.BufferGeometry][] = [
+    [new THREE.TorusKnotGeometry(0.2, 0.07, 72, 10), new THREE.TorusGeometry(0.22, 0.09, 6, 9)],
+    [new THREE.IcosahedronGeometry(0.3, 4), new THREE.IcosahedronGeometry(0.3, 0)],
+    [new THREE.BoxGeometry(0.42, 0.42, 0.42, 7, 7, 7), new THREE.BoxGeometry(0.42, 0.42, 0.42)],
+  ]
+  const heavyMat = new THREE.MeshStandardMaterial({ color: navy, roughness: 0.6 })
+  const wireMat = new THREE.LineBasicMaterial({ color: '#cfe9ff' })
+  const lightMat = new THREE.MeshStandardMaterial({ color: sky, flatShading: true, roughness: 0.35 })
+  const heavy = new THREE.Group() // on its way up
+  const light = new THREE.Group() // on its way down
+  g.add(heavy, light)
+  const models = pairs.map(([dense, tidy]) => {
+    const up = new THREE.Group()
+    up.add(new THREE.Mesh(dense, heavyMat), new THREE.LineSegments(new THREE.WireframeGeometry(dense), wireMat))
+    const down = new THREE.Mesh(tidy, lightMat)
+    down.castShadow = true
+    heavy.add(up)
+    light.add(down)
+    return { up, down }
+  })
+
+  const CYCLE = 6.5
+  const place = (t: number) => {
+    const round = Math.floor(t / CYCLE)
+    const s = t - round * CYCLE
+    models.forEach((m, i) => {
+      const mine = i === round % models.length
+      m.up.visible = mine
+      m.down.visible = mine
+    })
+    // Up: leave the roof, climb, vanish into the cloud
+    const rise = clamp01((s - 0.2) / 2)
+    heavy.position.y = 0.35 + ease(rise) * (CLOUD_Y - 0.35)
+    heavy.scale.setScalar(Math.min(1, s / 0.3) * (1 - clamp01((rise - 0.8) / 0.2)))
+    heavy.rotation.set(t * 0.9, t * 1.3, 0)
+    // The cloud swells while it works on the model
+    const working = clamp01((s - 2.1) / 0.4) * (1 - clamp01((s - 3.4) / 0.4))
+    cloud.scale.setScalar(1 + working * (0.12 + Math.sin(t * 14) * 0.04))
+    // Down: the tidy version drops out of the cloud and settles on the roof
+    const fall = clamp01((s - 3.5) / 2)
+    light.position.y = CLOUD_Y - ease(fall) * (CLOUD_Y - 0.4)
+    light.scale.setScalar(clamp01(fall / 0.2) * (1 - clamp01((s - 6) / 0.4)))
+    light.rotation.y = t * 1.1
+  }
+  place(0)
+  g.userData.tick = place
+  return g
+}
+
+// ── 4149: an AI teammate sitting in on the meeting ──────────────────────────
+
+/** A speech bubble or note drawn on a canvas, as a texture for a sprite. */
+function cardTexture(w: number, h: number, draw: (ctx: CanvasRenderingContext2D) => void): THREE.CanvasTexture {
+  const c = document.createElement('canvas')
+  c.width = w
+  c.height = h
+  draw(c.getContext('2d')!)
+  const tex = new THREE.CanvasTexture(c)
+  tex.colorSpace = THREE.SRGBColorSpace
+  return tex
+}
+
+/**
+ * The meeting itself: speech bubbles pop up over each of the three people in
+ * turn, then a note rises from the AI teammate with three items on it, and
+ * each one gets ticked. `seats` are where the people sit; `ai` is the orb.
+ */
+export function createMeeting(seats: THREE.Vector3[], ai: THREE.Vector3, pink: string): THREE.Group {
+  const g = new THREE.Group()
+  const bubbleTex = cardTexture(128, 112, (ctx) => {
+    ctx.fillStyle = '#ffffff'
+    ctx.beginPath()
+    ctx.roundRect(4, 4, 120, 78, 22)
+    ctx.fill()
+    ctx.beginPath()
+    ctx.moveTo(40, 78)
+    ctx.lineTo(52, 108)
+    ctx.lineTo(70, 78)
+    ctx.fill()
+    ctx.fillStyle = '#9aa3ad'
+    ctx.fillRect(22, 26, 84, 9)
+    ctx.fillRect(22, 46, 58, 9)
+  })
+  const bubbles = seats.map((seat) => {
+    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: bubbleTex, transparent: true, depthWrite: false }))
+    sprite.center.set(0.4, 0)
+    sprite.position.copy(seat).add(new THREE.Vector3(0, 0.42, 0))
+    g.add(sprite)
+    return sprite
+  })
+  // The note, drawn once for each number of ticks
+  const notes = [0, 1, 2, 3].map((ticks) =>
+    cardTexture(160, 200, (ctx) => {
+      ctx.fillStyle = '#ffffff'
+      ctx.beginPath()
+      ctx.roundRect(4, 4, 152, 192, 18)
+      ctx.fill()
+      ctx.fillStyle = pink
+      ctx.beginPath()
+      ctx.roundRect(4, 4, 152, 34, [18, 18, 0, 0])
+      ctx.fill()
+      for (let i = 0; i < 3; i++) {
+        const y = 70 + i * 44
+        ctx.strokeStyle = pink
+        ctx.lineWidth = 5
+        ctx.strokeRect(20, y - 13, 26, 26)
+        ctx.fillStyle = '#b8bfc7'
+        ctx.fillRect(60, y - 5, 76, 10)
+        if (i < ticks) {
+          ctx.lineWidth = 7
+          ctx.lineCap = 'round'
+          ctx.beginPath()
+          ctx.moveTo(24, y)
+          ctx.lineTo(32, y + 8)
+          ctx.lineTo(46, y - 12)
+          ctx.stroke()
+        }
+      }
+    }),
+  )
+  const noteMat = new THREE.SpriteMaterial({ map: notes[0], transparent: true, depthWrite: false })
+  const note = new THREE.Sprite(noteMat)
+  note.center.set(0.5, 0)
+  g.add(note)
+
+  const CYCLE = 9.5
+  const pop = (x: number) => (x <= 0 ? 0 : x >= 1 ? 1 : 1 + 2.70158 * Math.pow(x - 1, 3) + 1.70158 * Math.pow(x - 1, 2))
+  const place = (t: number) => {
+    const s = t % CYCLE
+    bubbles.forEach((b, i) => {
+      const from = 0.3 + i * 0.85
+      const k = pop((s - from) / 0.3) * (1 - clamp01((s - from - 1.5) / 0.25))
+      b.scale.set(0.5 * k, 0.44 * k, 1)
+      b.visible = k > 0.01
+    })
+    // The note rises from the AI, gets its ticks, holds, and fades
+    const rise = ease(clamp01((s - 3.4) / 0.8))
+    const ticks = Math.min(3, Math.max(0, Math.floor((s - 4.5) / 0.65) + 1))
+    const map = notes[s < 4.5 ? 0 : ticks]
+    if (noteMat.map !== map) noteMat.map = map
+    const gone = clamp01((s - 8.6) / 0.6)
+    note.position.copy(ai).add(new THREE.Vector3(0, 0.25 + rise * 0.75, 0))
+    const size = pop((s - 3.4) / 0.4) * (1 - gone)
+    note.scale.set(0.56 * size, 0.7 * size, 1)
+    note.visible = size > 0.01
   }
   place(0)
   g.userData.tick = place

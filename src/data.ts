@@ -13,6 +13,8 @@ export type Place = {
   kind: 'education' | 'career'
   /** Which builder in scene/buildings.ts draws this place. */
   style: string
+  /** 'small' draws the building at a reduced size, for the lesser-known names. */
+  size?: 'small'
   roles: Role[]
 }
 
@@ -102,6 +104,7 @@ export const places: Place[] = [
     name: '4149',
     kind: 'career',
     style: 'studio',
+    size: 'small',
     roles: [{ title: 'AI Product', period: 'Dec 2023 – Jun 2024', location: 'New York, NY' }],
   },
   {
@@ -109,6 +112,7 @@ export const places: Place[] = [
     name: 'echo3D',
     kind: 'career',
     style: 'echo3d',
+    size: 'small',
     roles: [{ title: 'Software Engineer Intern', period: 'Jun 2024 – Aug 2024', location: 'New York, NY' }],
   },
   {

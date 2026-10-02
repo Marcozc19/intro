@@ -28,12 +28,11 @@ type Events = {
   onPick(id: string): void
   onPickBalloon(): void
   onPickNothing(): void
-  /** The visitor dragged away from a focused building: close its panel. */
-  onRelease(): void
 }
 
 const BG = '#e9f3f2'
 const BUILDING_SCALE = 1.3
+const SMALL = 0.72 // how much smaller a 'small' building is drawn
 const PUDONG = { x: 20.4, z: -17.2 }
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
 const smooth = (a: number, b: number, x: number) => {
@@ -99,25 +98,27 @@ export function createWorld(canvas: HTMLCanvasElement, labelsEl: HTMLElement, ha
   places.forEach((place, i) => {
     const built = createBuilding(place.style)
     const group = built.group
-    const height = built.height * BUILDING_SCALE
+    const scale = BUILDING_SCALE * (place.size === 'small' ? SMALL : 1)
+    const height = built.height * scale
     const site = sites[i]
     group.position.copy(site.position)
     group.rotation.y = site.rotationY
     scene.add(group)
     const front = new THREE.Vector3(Math.sin(site.rotationY), 0, Math.cos(site.rotationY))
     // Frame the building together with anything laid out in front of it.
-    const fore = (group.userData.forecourt ?? 0) * BUILDING_SCALE
+    const fore = (group.userData.forecourt ?? 0) * scale
     const target = site.position.clone().addScaledVector(front, fore * 0.42).setY(site.position.y + height * (fore ? 0.28 : 0.45))
     // Look down fairly steeply, so a row of buildings in front doesn't hide this one.
-    const pos = target.clone().addScaledVector(front, 9 + height * 0.9 + fore * 0.45).setY(target.y + 8.5 + height * 0.35 + fore * 0.45)
+    const near = place.size === 'small' ? 0.55 : 1 // stand closer to a small building
+    const pos = target.clone().addScaledVector(front, (9 + height * 0.9) * near + fore * 0.45).setY(target.y + (8.5 + height * 0.35) * near + fore * 0.45)
     // Lawns and plazas that belong to the building, in world coordinates
     group.updateMatrixWorld()
     for (const [cx, cz] of built.clearings) {
-      const p = group.localToWorld(new THREE.Vector3(cx * BUILDING_SCALE, 0, cz * BUILDING_SCALE))
+      const p = group.localToWorld(new THREE.Vector3(cx * scale, 0, cz * scale))
       clearings.push(new THREE.Vector2(p.x, p.z))
     }
     addItem(place.id, 'ground', place.short ?? place.name, group,
-      site.position.clone().setY(site.position.y + height + 0.7), { pos, target }, BUILDING_SCALE, 0.5 + i * 0.16)
+      site.position.clone().setY(site.position.y + height + 0.7), { pos, target }, scale, 0.5 + i * 0.16)
   })
 
   // Cornell Tech's tram: a station on the building's seaward side, heading out to sea.
@@ -286,19 +287,7 @@ export function createWorld(canvas: HTMLCanvasElement, labelsEl: HTMLElement, ha
   let selected: string | null = null
 
   /** Fly to an item, or back to the overview of a level when id is null. */
-  let recentring = false
-  /** Drop the focused item without flying anywhere; the pivot glides back to the centre. */
-  function release() {
-    selected = null
-    shiftGoal = 0.13
-    recentring = true
-    labelsEl.classList.remove('has-selection')
-    for (const it of items) it.label.classList.remove('selected')
-    events.onRelease()
-  }
-
   function focus(id: string | null, toLevel: Level = level) {
-    recentring = false
     const item = id ? items.find((it) => it.id === id) : undefined
     const nextLevel = item ? item.level : toLevel
     const climbing = nextLevel !== level
@@ -339,9 +328,8 @@ export function createWorld(canvas: HTMLCanvasElement, labelsEl: HTMLElement, ha
   }
 
   canvas.addEventListener('pointermove', (e) => {
-    // Dragging always turns the view about the middle of the island (or of
-    // the clouds). If a building is focused, a drag lets go of it.
-    if (downAt && selected && !tween && Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y) > 6) release()
+    // Dragging turns the view about whatever is in focus: the island, the
+    // clouds, or the building the visitor has clicked into.
     hovered = downAt ? null : pickAt(e.clientX, e.clientY)
     canvas.style.cursor = hovered ? 'pointer' : 'grab'
   })
@@ -389,15 +377,6 @@ export function createWorld(canvas: HTMLCanvasElement, labelsEl: HTMLElement, ha
     resize()
 
     stepTween(dt)
-    if (recentring && !tween) {
-      // Glide the pivot back to the centre. The zoom level and viewing direction
-      // stay exactly as the visitor left them.
-      const home = overview(level).target
-      const away = camera.position.clone().sub(controls.target)
-      controls.target.lerp(home, Math.min(1, dt * 3))
-      camera.position.copy(controls.target).add(away)
-      if (controls.target.distanceTo(home) < 0.03) recentring = false
-    }
     if (!tween) controls.update()
 
     // Wide screens shift sideways; narrow ones lift the scene above the bottom sheet.

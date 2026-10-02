@@ -2,7 +2,8 @@ import * as THREE from 'three'
 import { box, cyl, dome, gable, glow, logoPlate, mat, sign, windowedBox } from './kit'
 import { createSmoke } from './life'
 import {
-  createBanner, createChartFacade, createFeedScreen, createHeadset, createHologramWorld, createNoteLogo, createStringLights,
+  createBanner, createChartFacade, createCloudPipeline, createFeedScreen, createHeadset, createHologramWorld, createMeeting,
+  createNoteLogo, createStringLights,
 } from './signature'
 
 // One builder per place. Each draws into a group whose origin is the middle of
@@ -254,35 +255,99 @@ const cornell: Builder = (g) => {
   return 5.9
 }
 
+/** See-through glass for rooms whose inside should be visible. */
+const clearGlass = (tint: string) =>
+  new THREE.MeshStandardMaterial({ color: tint, transparent: true, opacity: 0.28, roughness: 0.1, depthWrite: false })
+
+// 4149 made an AI teammate that joined a team's calls and chats. A small
+// studio in the brand's pink-to-peach, with a glass meeting room at the front:
+// three people and, in the fourth seat, the AI.
 const studio: Builder = (g) => {
+  const PINK = '#ff67a8'
+  const PEACH = '#ffc5b1'
+  const CORAL = '#fb5a87'
   plinth(g, 2.1, 1.9)
-  windowedBox(g, 2.1, 1.6, 1.9, '#33363d', '#ffd27a', 0, 0.1, 0)
-  box(g, 2.2, 0.1, 2, mat('#22242a'), 0, 1.7, 0)
-  const cube = box(g, 0.5, 0.5, 0.5, glow('#9b8cff', 0.9), 0, 2.15, 0)
-  cube.rotation.set(0.6, 0.6, 0)
-  cube.userData.spin = 0.5
-  door(g, 0.96, '#ffd27a', 0.42, 0.62)
-  sign(g, '4149', 0.9, 0.28, '#111318', '#ffd27a', 0, 0.95, 0.97)
-  return 2.9
+  // Back half: the studio proper
+  box(g, 2.1, 1.5, 0.95, mat('#fff3ec'), 0, 0.1, -0.47)
+  box(g, 2.2, 0.1, 1.05, mat(PINK), 0, 1.6, -0.47)
+  // Front half: the meeting room, glass on three sides
+  const frame = mat(CORAL)
+  box(g, 2.1, 0.04, 0.95, mat('#fbe3d8'), 0, 0.1, 0.47) // floor
+  // Glass roof in a peach frame, so the meeting can be seen from above
+  for (const z of [0.02, 0.92]) box(g, 2.14, 0.07, 0.07, mat(PEACH), 0, 1.22, z)
+  for (const x of [-1.03, 1.03]) box(g, 0.07, 0.07, 0.97, mat(PEACH), x, 1.22, 0.47)
+  box(g, 2.06, 0.02, 0.9, clearGlass('#ffe9f1'), 0, 1.25, 0.47).castShadow = false
+  for (const x of [-1.03, 1.03]) for (const z of [0.02, 0.92]) box(g, 0.06, 1.12, 0.06, frame, x, 0.1, z)
+  const glass = clearGlass('#ffe9f1')
+  box(g, 2, 1.08, 0.02, glass, 0, 0.14, 0.93).castShadow = false
+  for (const x of [-1.03, 1.03]) box(g, 0.02, 1.08, 0.86, glass, x, 0.14, 0.47).castShadow = false
+  // Round table, three people, and the AI in the fourth seat
+  const TABLE = new THREE.Vector3(0, 0.14, 0.47)
+  cyl(g, 0.05, 0.07, 0.3, mat('#d8cfc8'), TABLE.x, TABLE.y, TABLE.z, 10)
+  cyl(g, 0.36, 0.36, 0.04, mat('#ffffff', 0.4), TABLE.x, TABLE.y + 0.3, TABLE.z, 24)
+  const seats: THREE.Vector3[] = []
+  const shirts = ['#3d5a80', '#6b7a8f', '#2f3e46']
+  for (let i = 0; i < 4; i++) {
+    const a = Math.PI / 4 + (i * Math.PI) / 2
+    const seat = new THREE.Vector3(TABLE.x + Math.cos(a) * 0.58, TABLE.y, TABLE.z + Math.sin(a) * 0.3)
+    if (i === 3) {
+      // The AI teammate: a softly pulsing orb hovering over its chair
+      const core = glow(PINK, 1.4)
+      const orb = new THREE.Mesh(new THREE.SphereGeometry(0.12, 20, 14), core)
+      orb.position.copy(seat).setY(TABLE.y + 0.5)
+      orb.userData.tick = (t: number) => {
+        core.emissiveIntensity = 1.3 + Math.sin(t * 3) * 0.5
+        orb.position.y = TABLE.y + 0.5 + Math.sin(t * 1.6) * 0.03
+      }
+      g.add(orb)
+      const halo = new THREE.Mesh(new THREE.SphereGeometry(0.19, 20, 14), clearGlass(PEACH))
+      halo.position.copy(orb.position)
+      g.add(halo)
+      g.add(createMeeting(seats.slice(), orb.position.clone(), PINK))
+    } else {
+      cyl(g, 0.07, 0.09, 0.3, mat(shirts[i]), seat.x, seat.y, seat.z, 10)
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.085, 14, 10), mat('#f2c9a0'))
+      head.position.set(seat.x, seat.y + 0.4, seat.z)
+      g.add(head)
+      seats.push(new THREE.Vector3(seat.x, seat.y + 0.55, seat.z))
+    }
+  }
+  // The building is drawn small, so its name is a large board on the roof
+  sign(g, '4149', 1.8, 0.56, PINK, '#ffffff', 0, 1.7, -0.02)
+  return 3.1
 }
 
+// echo3D is a cloud platform for 3D models. A small glass showroom in the
+// brand's blues, a model turning on a stand inside, and on the roof the
+// journey itself: a heavy model goes up to the cloud and a light one comes back.
 const echo3d: Builder = (g) => {
+  const NAVY = '#002d64'
+  const SKY = '#25c1fd'
+  const navy = mat(NAVY)
   plinth(g, 2.2, 1.9)
-  windowedBox(g, 2.2, 1.7, 1.9, '#f3f1fb', '#6c4cf1', 0, 0.1, 0)
-  box(g, 2.3, 0.12, 2, mat('#6c4cf1'), 0, 1.8, 0)
-  // A floating 3D asset, slowly turning
-  const asset = new THREE.Mesh(
-    new THREE.IcosahedronGeometry(0.42, 0),
-    new THREE.MeshStandardMaterial({ color: '#6c4cf1', flatShading: true, roughness: 0.35 }),
+  box(g, 2.2, 0.04, 1.9, mat('#eef6fb'), 0, 0.1, 0) // floor
+  box(g, 2.2, 1.5, 0.08, navy, 0, 0.1, -0.91) // back wall
+  for (const x of [-1.07, 1.07]) for (const z of [-0.9, 0.9]) box(g, 0.07, 1.5, 0.07, navy, x, 0.1, z)
+  const glass = clearGlass('#cdeeff')
+  box(g, 2.1, 1.46, 0.02, glass, 0, 0.12, 0.92).castShadow = false
+  for (const x of [-1.08, 1.08]) box(g, 0.02, 1.46, 1.76, glass, x, 0.12, 0).castShadow = false
+  box(g, 2.3, 0.12, 2, navy, 0, 1.6, 0) // roof
+  // On show inside: a model turning on a stand
+  cyl(g, 0.34, 0.38, 0.3, mat('#ffffff', 0.4), 0, 0.14, 0, 24)
+  const exhibit = new THREE.Mesh(
+    new THREE.IcosahedronGeometry(0.34, 0),
+    new THREE.MeshStandardMaterial({ color: SKY, flatShading: true, roughness: 0.3 }),
   )
-  asset.position.set(0, 2.6, 0)
-  asset.castShadow = true
-  asset.userData.spin = 0.8
-  asset.userData.bob = 0.08
-  g.add(asset)
-  door(g, 0.96, '#3b2a8c', 0.45, 0.7)
-  sign(g, 'echo3D', 1, 0.28, '#6c4cf1', '#ffffff', 0, 1, 0.97)
-  return 3.2
+  exhibit.position.set(0, 0.9, 0)
+  exhibit.userData.spin = 0.8
+  g.add(exhibit)
+  // Up to the cloud and back
+  const pipeline = createCloudPipeline(NAVY, SKY)
+  pipeline.position.set(0.35, 1.72, -0.25)
+  g.add(pipeline)
+  // The building is drawn small, so its name is a large board on the roof
+  sign(g, 'echo3D', 1.9, 0.56, NAVY, '#ffffff', -0.1, 1.72, 0.95)
+  return 4
 }
 
 const tiktok: Builder = (g) => {

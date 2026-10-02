@@ -54,11 +54,6 @@ function projectNodes(project: Project) {
 const world = createWorld($<HTMLCanvasElement>('#scene'), $('#labels'), $('#haze'), {
   onPick: (id) => select(id),
   onPickBalloon: () => setLevel(world.level === 'ground' ? 'sky' : 'ground'),
-  onRelease: () => {
-    panel.hidden = true
-    document.body.classList.remove('has-selection')
-    history.replaceState(null, '', location.pathname + location.search)
-  },
   onPickNothing: () => {
     if (!panel.hidden) select(null)
   },

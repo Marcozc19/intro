@@ -80,7 +80,7 @@ function pathLines(places: Place[], sites: Plot[]): THREE.Vector2[][] {
   const walks = [...main, ...river]
   places.forEach((place, i) => {
     if (place.kind !== 'career') return
-    const door = doorOf(sites[i], 2.6)
+    const door = doorOf(sites[i], place.size === 'small' ? 1.9 : 2.6)
     const nearest = walks.reduce((a, b) => (a.distanceTo(door) < b.distanceTo(door) ? a : b))
     if (nearest.distanceTo(door) > 0.8) lines.push([door, nearest])
   })
