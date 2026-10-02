@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js'
 import { box, cyl, glow, mat, rng } from './kit'
 import { groundHeight } from './terrain'
 
@@ -269,6 +270,192 @@ export function createTsinghuaGate(): THREE.Group {
   const plaque = new THREE.Mesh(new THREE.PlaneGeometry(0.78, 0.195), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.8 }))
   plaque.position.set(0, 1.7, 0.205)
   g.add(plaque)
+  return g
+}
+
+// ── ByteDance · Pico: a VR headset projecting a world being built ───────────
+
+/**
+ * The outline of a VR visor seen from the front: a wide rounded shape with a
+ * notch in the bottom edge for the nose. Centred on the origin.
+ */
+function visorOutline(w: number, h: number): THREE.Shape {
+  const x = w / 2
+  const y = h / 2
+  const r = h * 0.34 // corner radius
+  const s = new THREE.Shape()
+  s.moveTo(-x + r, y)
+  s.lineTo(x - r, y)
+  s.quadraticCurveTo(x, y, x, y - r)
+  s.lineTo(x, -y + r)
+  s.quadraticCurveTo(x, -y, x - r, -y)
+  // Nose notch
+  s.lineTo(w * 0.17, -y)
+  s.bezierCurveTo(w * 0.1, -y, w * 0.09, -y + h * 0.36, 0, -y + h * 0.36)
+  s.bezierCurveTo(-w * 0.09, -y + h * 0.36, -w * 0.1, -y, -w * 0.17, -y)
+  s.lineTo(-x + r, -y)
+  s.quadraticCurveTo(-x, -y, -x, -y + r)
+  s.lineTo(-x, y - r)
+  s.quadraticCurveTo(-x, y, -x + r, y)
+  return s
+}
+
+/**
+ * A standalone VR headset. The visor is a deep white goggle with a nose notch,
+ * a glossy black face and four tracking cameras; inside are the face cushion
+ * and two lenses. A wide band runs from each side round the back of the head
+ * to a padded cradle, and another band goes over the top. It faces +z and its
+ * origin is the middle of the visor.
+ */
+export function createHeadset(): THREE.Group {
+  const g = new THREE.Group()
+  g.name = 'headset'
+  const shell = mat('#f4f5f7', 0.45)
+  const gloss = mat('#0d0f13', 0.12, 0.6)
+  const pad = mat('#30343b', 0.9)
+  const band = mat('#dfe2e7', 0.7)
+  const add = (geo: THREE.BufferGeometry, material: THREE.Material, x = 0, y = 0, z = 0) => {
+    const mesh = new THREE.Mesh(geo, material)
+    mesh.position.set(x, y, z)
+    mesh.castShadow = true
+    g.add(mesh)
+    return mesh
+  }
+  const W = 1.7
+  const H = 0.86
+  const DEPTH = 0.6
+  // Visor: the goggle shape pushed back into a deep, soft-edged body
+  const body = new THREE.ExtrudeGeometry(visorOutline(W, H), {
+    depth: DEPTH, bevelEnabled: true, bevelSize: 0.05, bevelThickness: 0.05, bevelSegments: 4, curveSegments: 16,
+  })
+  body.translate(0, 0, -DEPTH / 2)
+  add(body, shell)
+  // Black glass face, the same shape a little smaller, standing just proud of the body
+  const face = new THREE.ExtrudeGeometry(visorOutline(W * 0.9, H * 0.82), { depth: 0.04, bevelEnabled: false, curveSegments: 16 })
+  add(face, gloss, 0, 0.02, DEPTH / 2 + 0.035)
+  // Tracking cameras near the corners of the face
+  for (const x of [-0.6, 0.6]) {
+    for (const y of [-0.17, 0.23]) {
+      const camera = add(new THREE.CylinderGeometry(0.055, 0.055, 0.03, 14), mat('#6b7480', 0.3, 0.7), x, y, DEPTH / 2 + 0.08)
+      camera.rotation.x = Math.PI / 2
+    }
+  }
+  // Inside: the cushion that sits against the face, and the two lenses
+  const cushion = new THREE.ExtrudeGeometry(visorOutline(W * 0.92, H * 0.88), { depth: 0.14, bevelEnabled: false, curveSegments: 16 })
+  add(cushion, pad, 0, 0, -DEPTH / 2 - 0.18)
+  for (const x of [-0.36, 0.36]) {
+    const lens = add(new THREE.CylinderGeometry(0.23, 0.23, 0.04, 28), mat('#27406a', 0.08, 0.8), x, 0.06, -DEPTH / 2 - 0.19)
+    lens.rotation.x = Math.PI / 2
+    add(new THREE.TorusGeometry(0.23, 0.03, 8, 28), mat('#111318', 0.5), x, 0.06, -DEPTH / 2 - 0.2)
+  }
+
+  // Head band: a wide loop from the sides of the visor round the back of the head
+  const BACK = 1.75 // how far behind the visor the band reaches
+  const loop = add(new THREE.TorusGeometry(W / 2 - 0.04, 0.055, 10, 48, Math.PI), band, 0, 0.04, -DEPTH / 2 + 0.05)
+  loop.rotation.x = -Math.PI / 2 // lay it flat, curving away behind the visor
+  loop.scale.set(1, (BACK - 0.1) / (W / 2 - 0.04), 2.6) // deep enough for a head, and wide like a strap
+  // Padded cradle at the back of the head
+  add(new RoundedBoxGeometry(0.78, 0.46, 0.2, 4, 0.09), shell, 0, 0.04, -DEPTH / 2 - BACK + 0.02)
+  add(new RoundedBoxGeometry(0.64, 0.34, 0.08, 3, 0.04), pad, 0, 0.04, -DEPTH / 2 - BACK + 0.14)
+  // Band over the top of the head, from the visor to the cradle
+  const span = BACK - 0.05
+  const over = add(new THREE.TorusGeometry(span / 2, 0.035, 8, 32, Math.PI), band, 0, H / 2 - 0.06, -DEPTH / 2 - span / 2)
+  over.rotation.y = Math.PI / 2
+  over.scale.set(1, 0.72, 3.2)
+  return g
+}
+
+/**
+ * A hologram of a little world that builds itself: a disc of ground appears,
+ * then blocks pop up on it one by one, it turns for a moment, and it dissolves.
+ * Each time round a different world is built. Origin is the centre of the disc.
+ */
+export function createHologramWorld(): THREE.Group {
+  const g = new THREE.Group()
+  g.name = 'hologram'
+  const CYAN = '#2fd0ee'
+  // Light, not paint: see-through, and unaffected by the scene's sun and shadows.
+  // (Plain transparency, not additive glow, which washes out against the pale sky.)
+  const light = (opacity: number) =>
+    new THREE.MeshBasicMaterial({ color: CYAN, transparent: true, opacity, depthWrite: false, side: THREE.DoubleSide })
+  const world = new THREE.Group()
+  g.add(world)
+
+  const ground = new THREE.Mesh(new THREE.CylinderGeometry(0.72, 0.62, 0.07, 28), light(0.5))
+  world.add(ground)
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.78, 0.012, 6, 40), light(0.9))
+  ring.rotation.x = Math.PI / 2
+  world.add(ring)
+
+  const COUNT = 9
+  const unit = new THREE.BoxGeometry(1, 1, 1)
+  unit.translate(0, 0.5, 0) // grow upwards from the ground
+  const edges = new THREE.EdgesGeometry(unit)
+  const roof = new THREE.ConeGeometry(0.75, 1, 4)
+  roof.rotateY(Math.PI / 4)
+  roof.translate(0, 0.5, 0)
+  const blocks = Array.from({ length: COUNT }, () => {
+    const body = new THREE.Mesh(unit, light(0.42))
+    const outline = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: '#0b93b8', transparent: true, depthWrite: false }))
+    const cap = new THREE.Mesh(roof, light(0.5))
+    const block = new THREE.Group()
+    block.add(body, outline, cap)
+    world.add(block)
+    return { block, cap }
+  })
+
+  // The beam the headset throws up to the hologram
+  const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.12, 1, 24, 1, true), light(0.16))
+  beam.position.y = -0.56
+  g.add(beam)
+
+  const CYCLE = 10
+  const BUILD = 0.7 // seconds between blocks
+  let laidOut = -1
+  /** A fresh arrangement of blocks for each world. */
+  function layout(cycle: number) {
+    const rand = rng(7000 + cycle)
+    const cells: [number, number][] = []
+    for (let x = -1; x <= 1; x++) for (let z = -1; z <= 1; z++) cells.push([x, z])
+    cells.sort(() => rand() - 0.5)
+    blocks.forEach(({ block, cap }, i) => {
+      const [cx, cz] = cells[i]
+      const w = 0.2 + rand() * 0.14
+      const h = 0.18 + rand() * 0.5
+      block.position.set(cx * 0.38 + (rand() - 0.5) * 0.06, 0.035, cz * 0.38 + (rand() - 0.5) * 0.06)
+      block.userData.size = [w, h, w]
+      // Some blocks are towers with flat tops, some are houses with a pitched roof
+      cap.visible = rand() < 0.45
+      cap.position.y = 1
+      cap.scale.set(1, 0.35 / h, 1)
+    })
+  }
+  const place = (t: number) => {
+    const cycle = Math.floor(t / CYCLE)
+    if (cycle !== laidOut) {
+      layout(cycle)
+      laidOut = cycle
+    }
+    const s = t - cycle * CYCLE
+    const dissolve = 1 - clamp01((s - (CYCLE - 0.9)) / 0.7)
+    const appear = clamp01(s / 0.6)
+    world.rotation.y = t * 0.35
+    world.scale.setScalar(appear)
+    blocks.forEach(({ block }, i) => {
+      const grow = clamp01((s - 0.8 - i * BUILD) / 0.45)
+      // Pop up with a little overshoot, and sink away at the end
+      const pop = grow === 0 ? 0 : 1 + 2.70158 * Math.pow(grow - 1, 3) + 1.70158 * Math.pow(grow - 1, 2)
+      const [w, h, d] = block.userData.size as [number, number, number]
+      block.visible = grow > 0 && dissolve > 0
+      block.scale.set(w, Math.max(0.001, h * pop * dissolve), d)
+    })
+    const flicker = 0.85 + Math.sin(t * 23) * 0.06 + Math.sin(t * 57) * 0.04
+    ;(ground.material as THREE.MeshBasicMaterial).opacity = 0.5 * flicker * dissolve
+    ;(ring.material as THREE.MeshBasicMaterial).opacity = 0.9 * flicker * dissolve
+    ;(beam.material as THREE.MeshBasicMaterial).opacity = 0.16 * flicker * (0.4 + 0.6 * dissolve)
+  }
+  place(0)
+  g.userData.tick = place
   return g
 }
 

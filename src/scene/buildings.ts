@@ -1,7 +1,9 @@
 import * as THREE from 'three'
 import { box, cyl, dome, gable, glow, logoPlate, mat, sign, windowedBox } from './kit'
 import { createSmoke } from './life'
-import { createBanner, createChartFacade, createFeedScreen, createNoteLogo, createStringLights } from './signature'
+import {
+  createBanner, createChartFacade, createFeedScreen, createHeadset, createHologramWorld, createNoteLogo, createStringLights,
+} from './signature'
 
 // One builder per place. Each draws into a group whose origin is the middle of
 // the plot at ground level, with the front door facing +z, and returns the
@@ -94,7 +96,6 @@ const wework: Builder = (g) => {
   for (const x of [-1.47, 1.47]) for (const z of [-0.53, 0, 0.53]) box(g, 0.05, 0.78, 0.07, steel, x, 0.1, z)
   box(g, 3, 0.12, 2.2, steel, 0, 0.88, 0)
   door(g, 1.08, '#2b2118', 0.5, 0.66)
-  sign(g, 'wework', 1.25, 0.26, '#111111', '#ffffff', 0, 0.9, 1.12)
 
   // Upper floors
   windowedBox(g, 2.9, 2.2, 2.1, '#15171b', '#55646f', 0, 1, 0, 0.6)
@@ -105,6 +106,10 @@ const wework: Builder = (g) => {
     chart.rotation.y = side === 1 ? 0 : Math.PI
     g.add(chart)
   }
+
+  // The name, large, standing along the front edge of the roof
+  sign(g, 'wework', 2.5, 0.62, '#111111', '#ffffff', 0, 3.38, 1.02)
+  for (const x of [-1, 1]) box(g, 0.06, 0.1, 0.06, steel, x, 3.3, 1.02)
 
   // Roof terrace: timber deck, umbrella, planters, a string of lights
   box(g, 3, 0.1, 2.2, mat('#c58b55'), 0, 3.2, 0)
@@ -137,20 +142,27 @@ const wework: Builder = (g) => {
   return 4.3
 }
 
+// ByteDance, where the work was on Pico Worlds: a VR headset rests on the
+// roof and projects a hologram of a little world building itself.
 const pico: Builder = (g) => {
   plinth(g, 2.8, 2.3)
   windowedBox(g, 2.8, 3.2, 2.3, '#eef1f5', '#3d6fd6', 0, 0.1, 0)
   box(g, 2.95, 0.14, 2.45, mat('#c9d2de'), 0, 3.3, 0)
-  // A VR headset parked on the roof
-  const headset = new THREE.Group()
-  headset.position.set(0, 3.44, 0.1)
-  g.add(headset)
-  box(headset, 1.5, 0.62, 0.7, white, 0, 0.12, 0)
-  box(headset, 1.4, 0.44, 0.1, mat('#16181d', 0.25, 0.4), 0, 0.21, 0.35)
-  box(headset, 1.66, 0.16, 0.9, mat('#3a3d45'), 0, 0.35, -0.5)
   door(g, 1.16, '#27437f', 0.55, 0.75)
-  sign(g, 'ByteDance · PICO', 2, 0.26, '#1c2a4a', '#ffffff', 0, 1, 1.17)
-  return 4.4
+  // The company logo, centred along the top of the front (596 × 125 image)
+  logoPlate(g, 2.3, 0.48, 'logos/bytedance.png', 'ByteDance', 0, 2.72, 1.17)
+
+  // The headset rests on the roof, turned a little so the band shows, and
+  // tipped back so its face looks up at the hologram
+  const headset = createHeadset()
+  headset.position.set(0.1, 4, 0.55)
+  headset.rotation.set(-0.28, 0.3, 0, 'YXZ')
+  headset.scale.setScalar(0.9)
+  g.add(headset)
+  const hologram = createHologramWorld()
+  hologram.position.set(0.25, 5.5, 1)
+  g.add(hologram)
+  return 6.5
 }
 
 /** Dark photovoltaic panels with a fine grid, for the solar canopy. */
