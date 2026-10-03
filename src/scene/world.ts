@@ -406,7 +406,7 @@ export function createWorld(canvas: HTMLCanvasElement, labelsEl: HTMLElement, ha
     balloonHover += ((hovered === 'balloon' ? 1 : 0) - balloonHover) * Math.min(1, dt * 10)
     balloon.scale.setScalar(1.2 * (1 + balloonHover * 0.05))
     const riding = altitude > 0.02 && altitude < 0.98
-    balloonLabel.textContent = level === 'sky' ? 'Back to the island ↓' : 'Ride up to my ideas ↑'
+    balloonLabel.textContent = level === 'sky' ? 'Drift back down ↓' : 'Ride above the clouds ↑'
     balloonLabel.classList.toggle('hover', hovered === 'balloon')
     projected.set(BALLOON.x, balloon.position.y + 8.2, BALLOON.z).project(camera)
     balloonLabel.style.display = riding || projected.z >= 1 || selected ? 'none' : ''
