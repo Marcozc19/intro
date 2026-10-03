@@ -303,7 +303,7 @@ const studio: Builder = (g) => {
       const halo = new THREE.Mesh(new THREE.SphereGeometry(0.19, 20, 14), clearGlass(PEACH))
       halo.position.copy(orb.position)
       g.add(halo)
-      g.add(createMeeting(seats.slice(), orb.position.clone(), PINK))
+      g.add(createMeeting(seats.slice()))
     } else {
       cyl(g, 0.07, 0.09, 0.3, mat(shirts[i]), seat.x, seat.y, seat.z, 10)
       const head = new THREE.Mesh(new THREE.SphereGeometry(0.085, 14, 10), mat('#f2c9a0'))

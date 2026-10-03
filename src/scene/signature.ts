@@ -546,10 +546,9 @@ function cardTexture(w: number, h: number, draw: (ctx: CanvasRenderingContext2D)
 
 /**
  * The meeting itself: speech bubbles pop up over each of the three people in
- * turn, then a note rises from the AI teammate with three items on it, and
- * each one gets ticked. `seats` are where the people sit; `ai` is the orb.
+ * turn, then the room goes quiet for a moment. `seats` are where the people sit.
  */
-export function createMeeting(seats: THREE.Vector3[], ai: THREE.Vector3, pink: string): THREE.Group {
+export function createMeeting(seats: THREE.Vector3[]): THREE.Group {
   const g = new THREE.Group()
   const bubbleTex = cardTexture(128, 112, (ctx) => {
     ctx.fillStyle = '#ffffff'
@@ -572,42 +571,7 @@ export function createMeeting(seats: THREE.Vector3[], ai: THREE.Vector3, pink: s
     g.add(sprite)
     return sprite
   })
-  // The note, drawn once for each number of ticks
-  const notes = [0, 1, 2, 3].map((ticks) =>
-    cardTexture(160, 200, (ctx) => {
-      ctx.fillStyle = '#ffffff'
-      ctx.beginPath()
-      ctx.roundRect(4, 4, 152, 192, 18)
-      ctx.fill()
-      ctx.fillStyle = pink
-      ctx.beginPath()
-      ctx.roundRect(4, 4, 152, 34, [18, 18, 0, 0])
-      ctx.fill()
-      for (let i = 0; i < 3; i++) {
-        const y = 70 + i * 44
-        ctx.strokeStyle = pink
-        ctx.lineWidth = 5
-        ctx.strokeRect(20, y - 13, 26, 26)
-        ctx.fillStyle = '#b8bfc7'
-        ctx.fillRect(60, y - 5, 76, 10)
-        if (i < ticks) {
-          ctx.lineWidth = 7
-          ctx.lineCap = 'round'
-          ctx.beginPath()
-          ctx.moveTo(24, y)
-          ctx.lineTo(32, y + 8)
-          ctx.lineTo(46, y - 12)
-          ctx.stroke()
-        }
-      }
-    }),
-  )
-  const noteMat = new THREE.SpriteMaterial({ map: notes[0], transparent: true, depthWrite: false })
-  const note = new THREE.Sprite(noteMat)
-  note.center.set(0.5, 0)
-  g.add(note)
-
-  const CYCLE = 9.5
+  const CYCLE = 5
   const pop = (x: number) => (x <= 0 ? 0 : x >= 1 ? 1 : 1 + 2.70158 * Math.pow(x - 1, 3) + 1.70158 * Math.pow(x - 1, 2))
   const place = (t: number) => {
     const s = t % CYCLE
@@ -617,16 +581,6 @@ export function createMeeting(seats: THREE.Vector3[], ai: THREE.Vector3, pink: s
       b.scale.set(0.5 * k, 0.44 * k, 1)
       b.visible = k > 0.01
     })
-    // The note rises from the AI, gets its ticks, holds, and fades
-    const rise = ease(clamp01((s - 3.4) / 0.8))
-    const ticks = Math.min(3, Math.max(0, Math.floor((s - 4.5) / 0.65) + 1))
-    const map = notes[s < 4.5 ? 0 : ticks]
-    if (noteMat.map !== map) noteMat.map = map
-    const gone = clamp01((s - 8.6) / 0.6)
-    note.position.copy(ai).add(new THREE.Vector3(0, 0.25 + rise * 0.75, 0))
-    const size = pop((s - 3.4) / 0.4) * (1 - gone)
-    note.scale.set(0.56 * size, 0.7 * size, 1)
-    note.visible = size > 0.01
   }
   place(0)
   g.userData.tick = place
